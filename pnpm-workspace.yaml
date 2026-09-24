@@ -8,3 +8,9 @@ allowBuilds:
   prisma: true
   msgpackr-extract: false
   workerd: false
+# pnpm 10 (el que usa corepack en Hostinger) no entiende allowBuilds
+onlyBuiltDependencies:
+  - esbuild
+  - '@prisma/client'
+  - '@prisma/engines'
+  - prisma
