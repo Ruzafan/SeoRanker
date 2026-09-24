@@ -1,0 +1,12 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-stone-50 text-stone-900 antialiased dark:bg-stone-950 dark:text-stone-100;
+  }
+  code {
+    @apply rounded bg-black/5 px-1 py-0.5 text-[0.85em] dark:bg-white/10;
+  }
+}

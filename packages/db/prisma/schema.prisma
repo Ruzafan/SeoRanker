@@ -1,0 +1,126 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  plan      String   @default("free") // free | pro | agency — preparado, no usado aún
+  createdAt DateTime @default(now())
+  users     User[]
+  sites     Site[]
+}
+
+model User {
+  id             String       @id @default(cuid())
+  email          String       @unique
+  passwordHash   String
+  role           String       @default("owner") // owner | member
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId])
+}
+
+model Site {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  name           String
+  url            String
+  platform       String       @default("wordpress") // wordpress | shopify (futuro)
+  credentials    String // JSON cifrado AES-256-GCM
+  brandVoice     String?      @db.Text
+  language       String       @default("es")
+  country        String       @default("ES")
+  settings       Json         @default("{}") // wordCount, cadence, autoPublish, categoryId...
+  active         Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+
+  keywords Keyword[]
+  articles Article[]
+  jobs     JobRun[]
+  usage    UsageRecord[]
+
+  @@index([organizationId])
+}
+
+model Keyword {
+  id        String   @id @default(cuid())
+  siteId    String
+  site      Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  term      String
+  source    String   @default("manual") // manual | autocomplete | paa | gsc | import
+  intent    String? // informational | commercial | transactional
+  score     Int      @default(0)
+  status    String   @default("pending") // pending | queued | processing | done | failed | discarded
+  seedTerm  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  articles Article[]
+
+  @@unique([siteId, term])
+  @@index([siteId, status, score])
+  @@index([status, updatedAt]) // watchdog de zombis
+}
+
+model Article {
+  id              String    @id @default(cuid())
+  siteId          String
+  site            Site      @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  keywordId       String?
+  keyword         Keyword?  @relation(fields: [keywordId], references: [id], onDelete: SetNull)
+  title           String
+  slug            String
+  metaDescription String?
+  outline         Json?
+  contentHtml     String?   @db.Text
+  status          String    @default("draft") // draft | writing | ready | publishing | published | failed
+  remotePostId    Int? // ID del post en WordPress
+  remoteUrl       String?
+  wordCount       Int       @default(0)
+  publishedAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([siteId, status])
+  @@index([status, updatedAt]) // watchdog de zombis
+}
+
+model JobRun {
+  id         String    @id @default(cuid())
+  siteId     String
+  site       Site      @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  type       String // discover | outline | write | publish | brand-voice
+  status     String // queued | running | succeeded | failed
+  refId      String? // keywordId o articleId
+  attempt    Int       @default(1)
+  error      String?   @db.Text
+  meta       Json? // tokens, duración, modelo usado
+  startedAt  DateTime?
+  finishedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([siteId, createdAt])
+}
+
+model UsageRecord {
+  id           String @id @default(cuid())
+  siteId       String
+  site         Site   @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  period       String // "2026-09"
+  articles     Int    @default(0)
+  inputTokens  Int    @default(0)
+  outputTokens Int    @default(0)
+  costCents    Int    @default(0)
+
+  @@unique([siteId, period])
+}

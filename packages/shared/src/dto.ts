@@ -1,0 +1,147 @@
+import type { ArticleStatus, JobType, KeywordStatus } from './schemas.js';
+import type { SiteSettings } from './settings.js';
+import type { WarningCode } from './errors.js';
+
+/** Todas las fechas viajan como ISO string. Nunca se incluye `credentials`. */
+export interface UserDto {
+  id: string;
+  email: string;
+  role: string;
+  organizationId: string;
+  organizationName: string;
+  plan: string;
+  isAdmin: boolean;
+}
+
+export interface SiteDto {
+  id: string;
+  name: string;
+  url: string;
+  platform: string;
+  language: string;
+  country: string;
+  brandVoice: string | null;
+  settings: SiteSettings;
+  hasCredentials: boolean;
+  active: boolean;
+  createdAt: string;
+}
+
+export interface KeywordDto {
+  id: string;
+  siteId: string;
+  term: string;
+  source: string;
+  intent: string | null;
+  score: number;
+  status: KeywordStatus;
+  seedTerm: string | null;
+  createdAt: string;
+}
+
+export interface ArticleSummaryDto {
+  id: string;
+  siteId: string;
+  keywordId: string | null;
+  title: string;
+  slug: string;
+  status: ArticleStatus;
+  wordCount: number;
+  remoteUrl: string | null;
+  publishedAt: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+
+export interface OutlineSection {
+  heading: string;
+  points: string[];
+}
+
+export interface ArticleDto extends ArticleSummaryDto {
+  metaDescription: string | null;
+  contentHtml: string | null;
+  outline: {
+    title: string;
+    slug: string;
+    metaDescription: string;
+    sections: OutlineSection[];
+    faq: { question: string; answer: string }[];
+  } | null;
+  remotePostId: number | null;
+}
+
+export interface JobRunDto {
+  id: string;
+  siteId: string;
+  type: JobType;
+  status: 'queued' | 'running' | 'succeeded' | 'failed';
+  refId: string | null;
+  attempt: number;
+  error: string | null;
+  meta: Record<string, unknown> | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  createdAt: string;
+}
+
+export interface Paginated<T> {
+  items: T[];
+  page: number;
+  pageSize: number;
+  total: number;
+}
+
+export interface UsageDto {
+  period: string;
+  articles: number;
+  inputTokens: number;
+  outputTokens: number;
+  costCents: number;
+  plan: string;
+  /** null = sin tope. */
+  articlesLimit: number | null;
+  history: { period: string; articles: number; costCents: number }[];
+}
+
+export interface SiteStatsDto {
+  publishedThisMonth: number;
+  pendingKeywords: number;
+  inProgress: number;
+  usage: UsageDto;
+  recentJobs: JobRunDto[];
+}
+
+export interface ConnectionTestDto {
+  ok: boolean;
+  /** Código (WP_AUTH_FAILED, CONNECTION_FAILED…) o "OK". Nunca texto localizado. */
+  message: string;
+  details?: { yoastActive: boolean | null; yoastMetaExposed: boolean | null; siteName?: string };
+  warnings: WarningCode[];
+}
+
+/** Respuesta 202 de las acciones que encolan trabajo. */
+export interface EnqueuedDto {
+  jobRunId: string;
+}
+
+export interface BatchResultDto {
+  processed: number;
+  skipped: number;
+}
+
+export interface OrganizationAdminDto {
+  id: string;
+  name: string;
+  plan: string;
+  createdAt: string;
+  users: { id: string; email: string; role: string }[];
+  sites: {
+    id: string;
+    name: string;
+    url: string;
+    active: boolean;
+    articles: number;
+    keywords: number;
+  }[];
+}
