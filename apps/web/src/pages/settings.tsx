@@ -6,12 +6,15 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import {
+  PLANS,
+  isPlanId,
   siteSettingsSchema,
   type ConnectionTestDto,
   type SiteDto,
   type UpdateSiteInput,
 } from '@seo/shared';
 import {
+  Badge,
   Button,
   Card,
   ErrorBanner,
@@ -24,6 +27,7 @@ import {
 import { ConnectorCard } from '../components/connector';
 import {
   useAuthors,
+  useMe,
   useDeleteSite,
   useSite,
   useTestConnection,
@@ -49,6 +53,8 @@ const formSchema = z.object({
   authorId: z.string(),
   productCards: z.boolean(),
   autoBacklinks: z.boolean(),
+  autoRefresh: z.boolean(),
+  requireApproval: z.boolean(),
   active: z.boolean(),
 });
 type FormValues = z.infer<typeof formSchema>;
@@ -70,6 +76,8 @@ const toForm = (s: SiteDto): FormValues => ({
   authorId: s.settings.authorId ? String(s.settings.authorId) : '',
   productCards: s.settings.productCards,
   autoBacklinks: s.settings.autoBacklinks,
+  autoRefresh: s.settings.autoRefresh,
+  requireApproval: s.settings.requireApproval,
   active: s.active,
 });
 
@@ -82,6 +90,8 @@ export function SettingsPage() {
   const del = useDeleteSite(siteId);
   const [result, setResult] = useState<ConnectionTestDto | null>(null);
   const authors = useAuthors(siteId, !!site?.hasCredentials);
+  const { data: me } = useMe();
+  const plan = me && isPlanId(me.plan) ? PLANS[me.plan] : PLANS.free;
 
   const { register, handleSubmit, reset, formState } = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -120,6 +130,8 @@ export function SettingsPage() {
         authorId: v.authorId ? Number(v.authorId) : null,
         productCards: v.productCards,
         autoBacklinks: v.autoBacklinks,
+        autoRefresh: v.autoRefresh,
+        requireApproval: v.requireApproval,
       },
     };
     // Las credenciales solo se envían si el usuario escribe algo; en blanco = mantener las guardadas.
@@ -360,6 +372,40 @@ export function SettingsPage() {
               </datalist>
             </Field>
           </div>
+          <label
+            className={cx('flex items-start gap-2 text-sm', !plan.contentRefresh && 'opacity-60')}
+          >
+            <input
+              type="checkbox"
+              disabled={!plan.contentRefresh}
+              className="mt-0.5 rounded border-stone-300 text-teal-700 focus:ring-teal-600"
+              {...register('autoRefresh')}
+            />
+            <span>
+              Refrescar automáticamente lo que pierde tráfico{' '}
+              {!plan.contentRefresh && <Badge>Pro</Badge>}
+              <span className="block text-xs text-stone-500">
+                Con Search Console: cuando un artículo pierde más del 30 % de clics, se actualiza
+                con lo que posiciona hoy. Cuenta como un artículo del mes.
+              </span>
+            </span>
+          </label>
+          <label className={cx('flex items-start gap-2 text-sm', !plan.approvals && 'opacity-60')}>
+            <input
+              type="checkbox"
+              disabled={!plan.approvals}
+              className="mt-0.5 rounded border-stone-300 text-teal-700 focus:ring-teal-600"
+              {...register('requireApproval')}
+            />
+            <span>
+              Exigir aprobación del cliente antes de publicar{' '}
+              {!plan.approvals && <Badge>Agency</Badge>}
+              <span className="block text-xs text-stone-500">
+                Nada sale a WordPress (ni lo automático ni lo programado) hasta que alguien lo
+                apruebe en el editor. Invita a tu cliente en «Equipo y clientes».
+              </span>
+            </span>
+          </label>
           <label className="flex items-start gap-2 text-sm">
             <input
               type="checkbox"

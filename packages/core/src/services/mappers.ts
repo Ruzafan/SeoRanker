@@ -63,6 +63,9 @@ export function toArticleSummary(a: Article): ArticleSummaryDto {
     remoteUrl: a.remoteUrl,
     remoteStatus: a.remoteStatus,
     decayDetectedAt: a.decayDetectedAt?.toISOString() ?? null,
+    scheduledFor: a.scheduledFor?.toISOString() ?? null,
+    reviewStatus: a.reviewStatus as ArticleSummaryDto['reviewStatus'],
+    refreshedAt: a.refreshedAt?.toISOString() ?? null,
     publishedAt: a.publishedAt?.toISOString() ?? null,
     updatedAt: a.updatedAt.toISOString(),
     createdAt: a.createdAt.toISOString(),
@@ -83,6 +86,7 @@ export function toArticleDto(a: Article, keyword: string | null = null): Article
     remotePostId: a.remotePostId,
     keyword,
     featuredMediaId: a.featuredMediaId,
+    hasPreviousVersion: !!a.previousContentHtml,
     serp: serp?.results
       ? {
           fetchedAt: serp.fetchedAt ?? '',

@@ -22,15 +22,38 @@ model Organization {
   subscriptionStatus   String? // active | trialing | past_due | canceled | unpaid | incomplete...
   currentPeriodEnd     DateTime?
   cancelAtPeriodEnd    Boolean   @default(false)
+
+  // Marca blanca (plan Agency): informes con el nombre, logo y color de la agencia.
+  brandName    String?
+  brandLogoUrl String?
+  brandColor   String?
+
+  invitations Invitation[]
 }
 
 model User {
   id             String       @id @default(cuid())
   email          String       @unique
   passwordHash   String
-  role           String       @default("owner") // owner | member
+  role           String       @default("owner") // owner | member | viewer (cliente: lee, comenta y aprueba)
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime     @default(now())
+  comments       ArticleComment[]
+
+  @@index([organizationId])
+}
+
+/// Invitación a unirse a una organización. Solo se guarda el hash del token del enlace.
+model Invitation {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email          String
+  role           String // member | viewer
+  tokenHash      String       @unique
+  expiresAt      DateTime
+  acceptedAt     DateTime?
   createdAt      DateTime     @default(now())
 
   @@index([organizationId])
@@ -120,6 +143,13 @@ model Article {
   remoteUrl       String?
   remoteStatus    String? // estado del post en WordPress (draft | publish | future…), lo sincroniza `sync`
   decayDetectedAt DateTime? // pierde clics en Search Console: candidato a refrescar
+  /// Refresco: fecha y versión anterior del contenido (para poder deshacerlo).
+  refreshedAt         DateTime?
+  previousContentHtml String?   @db.Text
+  /// Publicación programada: el planificador lo publica en WordPress al llegar la fecha.
+  scheduledFor        DateTime?
+  /// Aprobación del cliente: none | pending | approved | changes_requested
+  reviewStatus        String    @default("none")
   wordCount       Int       @default(0)
   publishedAt     DateTime?
   createdAt       DateTime  @default(now())
@@ -132,6 +162,25 @@ model Article {
   conversions ArticleConversion[]
   linksOut    InternalLink[] @relation("linkFrom")
   linksIn     InternalLink[] @relation("linkTo")
+  comments    ArticleComment[]
+
+  @@index([status, scheduledFor]) // publicación programada
+}
+
+/// Comentario de revisión sobre un artículo (equipo o cliente).
+model ArticleComment {
+  id        String   @id @default(cuid())
+  siteId    String
+  articleId String
+  article   Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  /// approve | request_changes | comment
+  kind      String   @default("comment")
+  body      String   @db.Text
+  createdAt DateTime @default(now())
+
+  @@index([articleId, createdAt])
 }
 
 /// Grupo temático de keywords con una página pilar (la más amplia) y sus satélites.

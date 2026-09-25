@@ -636,6 +636,16 @@ describe.skipIf(!db)('API (integración con Postgres)', () => {
         ['delete', `/api/v1/articles/${article.id}`],
         ['post', `/api/v1/articles/${article.id}/publish`],
         ['post', `/api/v1/articles/${article.id}/regenerate`],
+        ['post', `/api/v1/articles/${article.id}/refresh`],
+        ['post', `/api/v1/articles/${article.id}/restore`],
+        ['post', `/api/v1/articles/${article.id}/review`, { decision: 'approve' }],
+        ['get', `/api/v1/articles/${article.id}/comments`],
+        ['post', `/api/v1/articles/${article.id}/comments`, { body: 'hola' }],
+        [
+          'get',
+          `/api/v1/sites/${site.id}/calendar?from=2026-01-01T00:00:00Z&to=2026-12-31T00:00:00Z`,
+        ],
+        ['get', `/api/v1/sites/${site.id}/report?month=2026-08`],
         ['get', `/api/v1/sites/${site.id}/jobs`],
         ['get', `/api/v1/sites/${site.id}/usage`],
         ['get', `/api/v1/sites/${site.id}/stats`],
@@ -757,6 +767,96 @@ describe.skipIf(!db)('API (integración con Postgres)', () => {
         status: 'active',
         usage: { articlesLimit: 400, maxSites: 25 },
       });
+    });
+  });
+
+  describe('clientes (rol viewer) e invitaciones', () => {
+    it('el propietario invita; el cliente se da de alta con el enlace, lee, comenta y aprueba, pero no cambia nada más', async () => {
+      await app.close();
+      await makeApp({ WEB_ORIGIN: 'https://app.test' });
+      const owner = await signup('owner@test.com');
+      const { body: site } = await owner.post('/api/v1/sites').send(siteBody);
+      await prisma.organization.updateMany({ data: { plan: 'agency' } });
+      const article = await prisma.article.create({
+        data: {
+          siteId: site.id,
+          title: 'Guía',
+          slug: 'g',
+          status: 'ready',
+          contentHtml: '<p>x</p>',
+          reviewStatus: 'pending',
+        },
+      });
+
+      const inv = await owner
+        .post('/api/v1/organization/invitations')
+        .send({ email: 'cliente@test.com', role: 'viewer' });
+      expect(inv.status).toBe(201);
+      const token = String(inv.body.url).split('/invite/')[1];
+      expect(inv.body.url).toMatch(/^https:\/\/app\.test\/invite\//);
+
+      const client = request.agent(app.server);
+      expect((await client.get(`/api/v1/auth/invitations/${token}`)).body).toMatchObject({
+        email: 'cliente@test.com',
+        role: 'viewer',
+      });
+      const accepted = await client
+        .post('/api/v1/auth/accept-invite')
+        .send({ token, password: PW });
+      expect(accepted.status).toBe(201);
+      expect(accepted.body).toMatchObject({ email: 'cliente@test.com', role: 'viewer' });
+
+      // Lee todo lo de su organización.
+      expect((await client.get(`/api/v1/sites/${site.id}`)).status).toBe(200);
+      expect((await client.get(`/api/v1/articles/${article.id}`)).status).toBe(200);
+      // Solo lectura…
+      for (const [method, path, body] of [
+        ['patch', `/api/v1/articles/${article.id}`, { title: 'x' }],
+        ['post', `/api/v1/articles/${article.id}/publish`, {}],
+        ['post', '/api/v1/sites', siteBody],
+        ['delete', `/api/v1/sites/${site.id}`, {}],
+      ] as const) {
+        const res = await (client as unknown as Record<string, (p: string) => request.Test>)[
+          method
+        ]!(path).send(body);
+        expect(res.status, `${method} ${path}`).toBe(403);
+        expect(res.body.error.code).toBe('FORBIDDEN');
+      }
+      expect(
+        (
+          await client
+            .post('/api/v1/organization/invitations')
+            .send({ email: 'x@x.es', role: 'member' })
+        ).body.error.code,
+      ).toBe('OWNER_REQUIRED');
+      // …salvo comentar y revisar.
+      expect(
+        (
+          await client
+            .post(`/api/v1/articles/${article.id}/comments`)
+            .send({ body: '¿Podemos añadir precios?' })
+        ).status,
+      ).toBe(201);
+      const review = await client
+        .post(`/api/v1/articles/${article.id}/review`)
+        .send({ decision: 'approve', comment: 'OK' });
+      expect(review.status).toBe(200);
+      expect(review.body.reviewStatus).toBe('approved');
+      const comments = await owner.get(`/api/v1/articles/${article.id}/comments`);
+      expect(
+        comments.body.map((c: { kind: string; author: string }) => [c.kind, c.author]),
+      ).toEqual([
+        ['comment', 'cliente@test.com'],
+        ['approve', 'cliente@test.com'],
+      ]);
+
+      // El enlace es de un solo uso.
+      expect(
+        (await request(app.server).post('/api/v1/auth/accept-invite').send({ token, password: PW }))
+          .body.error.code,
+      ).toBe('INVITATION_INVALID');
+      const members = await owner.get('/api/v1/organization/members');
+      expect(members.body.members).toHaveLength(2);
     });
   });
 

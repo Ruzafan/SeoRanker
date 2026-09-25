@@ -11,11 +11,20 @@ export const QUEUE_NAMES = {
   sync: 'sync',
   cluster: 'cluster',
   backlink: 'backlink',
+  refresh: 'refresh',
   maintenance: 'maintenance',
 } as const;
 
 export type PipelineJobType =
-  'brand-voice' | 'discover' | 'outline' | 'write' | 'publish' | 'sync' | 'cluster' | 'backlink';
+  | 'brand-voice'
+  | 'discover'
+  | 'outline'
+  | 'write'
+  | 'publish'
+  | 'sync'
+  | 'cluster'
+  | 'backlink'
+  | 'refresh';
 
 export interface JobPayload {
   jobRunId: string;
@@ -71,6 +80,7 @@ export function createQueues(
     sync: make(QUEUE_NAMES.sync),
     cluster: make(QUEUE_NAMES.cluster),
     backlink: make(QUEUE_NAMES.backlink),
+    refresh: make(QUEUE_NAMES.refresh),
     maintenance: make(QUEUE_NAMES.maintenance),
   };
 }

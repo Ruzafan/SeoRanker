@@ -24,3 +24,5 @@ export * from './services/billing.js';
 export * from './services/search-console.js';
 export * from './services/performance.js';
 export * from './services/demo.js';
+export * from './services/organization.js';
+export * from './services/report.js';

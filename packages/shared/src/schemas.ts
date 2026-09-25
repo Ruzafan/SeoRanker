@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { PAID_PLAN_IDS, PLATFORM_IDS } from './plans.js';
+import { INVITABLE_ROLES, PAID_PLAN_IDS, PLATFORM_IDS } from './plans.js';
 import { editableSettingsSchema } from './settings.js';
 
 // ---- Auth ----------------------------------------------------------------
@@ -114,6 +114,8 @@ export const patchArticleSchema = z
       .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
     metaDescription: z.string().max(400).nullable(),
     contentHtml: z.string().max(500_000),
+    /** Publicación programada (ISO); null la quita. */
+    scheduledFor: z.string().datetime({ offset: true }).nullable(),
   })
   .partial();
 export type PatchArticleInput = z.infer<typeof patchArticleSchema>;
@@ -135,6 +137,7 @@ export const JOB_TYPES = [
   'sync',
   'cluster',
   'backlink',
+  'refresh',
   'watchdog',
   'schedule',
 ] as const;
@@ -162,3 +165,49 @@ export const googleCallbackSchema = z.object({
 
 // ---- Público ----------------------------------------------------------------
 export const demoSchema = z.object({ url: z.string().trim().min(4).max(300) });
+
+// ---- Flujo editorial -------------------------------------------------------
+export const reviewSchema = z.object({
+  decision: z.enum(['approve', 'request_changes']),
+  comment: z.string().trim().max(5000).optional(),
+});
+export type ReviewInput = z.infer<typeof reviewSchema>;
+
+export const commentSchema = z.object({ body: z.string().trim().min(1).max(5000) });
+
+export const calendarQuerySchema = z.object({
+  from: z.string().datetime({ offset: true }),
+  to: z.string().datetime({ offset: true }),
+});
+
+// ---- Organización ----------------------------------------------------------
+export const inviteSchema = z.object({
+  email: z.string().trim().toLowerCase().email().max(200),
+  role: z.enum(INVITABLE_ROLES),
+});
+export type InviteInput = z.infer<typeof inviteSchema>;
+
+export const memberRoleSchema = z.object({ role: z.enum(INVITABLE_ROLES) });
+
+export const acceptInviteSchema = z.object({
+  token: z.string().min(20).max(200),
+  password: z.string().min(10).max(200),
+});
+export type AcceptInviteInput = z.infer<typeof acceptInviteSchema>;
+
+export const brandingSchema = z.object({
+  brandName: z.string().trim().max(100).nullable(),
+  brandLogoUrl: z
+    .string()
+    .trim()
+    .max(500)
+    .regex(/^https:\/\//, 'https')
+    .nullable(),
+  brandColor: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .nullable(),
+});
+export type BrandingInput = z.infer<typeof brandingSchema>;
+
+export const reportQuerySchema = z.object({ month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/) });

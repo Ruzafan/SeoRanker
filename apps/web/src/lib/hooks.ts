@@ -6,6 +6,14 @@ import type {
   ArticleSummaryDto,
   BatchResultDto,
   BillingDto,
+  BrandingDto,
+  BrandingInput,
+  CommentDto,
+  InvitationInfoDto,
+  InvitationLinkDto,
+  MembersDto,
+  MonthlyReportDto,
+  ReviewInput,
   ClusterDto,
   CheckoutResultDto,
   PaidPlanId,
@@ -345,6 +353,102 @@ export const useBillingPortal = () =>
       if (res.url) window.location.assign(res.url);
     },
   });
+
+// ---- Flujo editorial ---------------------------------------------------------
+export const useRefreshArticle = (siteId: string, id: string) =>
+  useArticleMutation(siteId, id, () => api.post<EnqueuedDto>(`/articles/${id}/refresh`));
+export const useRestoreArticle = (siteId: string, id: string) =>
+  useArticleMutation(siteId, id, () => api.post<ArticleDto>(`/articles/${id}/restore`));
+export const useReviewArticle = (siteId: string, id: string) => {
+  const qc = useQueryClient();
+  return useArticleMutation(siteId, id, async (input: ReviewInput) => {
+    const res = await api.post<ArticleDto>(`/articles/${id}/review`, input);
+    void qc.invalidateQueries({ queryKey: ['article', id, 'comments'] });
+    return res;
+  });
+};
+
+export const useComments = (id: string) =>
+  useQuery({
+    queryKey: ['article', id, 'comments'],
+    queryFn: () => api.get<CommentDto[]>(`/articles/${id}/comments`),
+  });
+export function useAddComment(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: string) => api.post<CommentDto[]>(`/articles/${id}/comments`, { body }),
+    onSuccess: (list) => qc.setQueryData(['article', id, 'comments'], list),
+  });
+}
+
+export const useCalendar = (siteId: string, from: string, to: string) =>
+  useQuery({
+    queryKey: ['site', siteId, 'calendar', from, to],
+    queryFn: () =>
+      api.get<{ items: ArticleSummaryDto[]; unscheduled: ArticleSummaryDto[] }>(
+        `/sites/${siteId}/calendar${qs({ from, to })}`,
+      ),
+  });
+export const useSchedule = (siteId: string) =>
+  useSiteMutation(siteId, (v: { id: string; scheduledFor: string | null }) =>
+    api.patch<ArticleDto>(`/articles/${v.id}`, { scheduledFor: v.scheduledFor }),
+  );
+
+export const useReport = (siteId: string, month: string) =>
+  useQuery({
+    queryKey: ['site', siteId, 'report', month],
+    queryFn: () => api.get<MonthlyReportDto>(`/sites/${siteId}/report${qs({ month })}`),
+  });
+
+// ---- Organización -------------------------------------------------------------
+export const useMembers = () =>
+  useQuery({ queryKey: ['members'], queryFn: () => api.get<MembersDto>('/organization/members') });
+
+function useOrgMutation<V, R>(fn: (v: V) => Promise<R>) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['members'] });
+      void qc.invalidateQueries({ queryKey: ['branding'] });
+    },
+  });
+}
+export const useInvite = () =>
+  useOrgMutation((v: { email: string; role: 'member' | 'viewer' }) =>
+    api.post<InvitationLinkDto>('/organization/invitations', v),
+  );
+export const useRevokeInvite = () =>
+  useOrgMutation((id: string) => api.delete(`/organization/invitations/${id}`));
+export const useChangeRole = () =>
+  useOrgMutation((v: { id: string; role: 'member' | 'viewer' }) =>
+    api.patch(`/organization/members/${v.id}`, { role: v.role }),
+  );
+export const useRemoveMember = () =>
+  useOrgMutation((id: string) => api.delete(`/organization/members/${id}`));
+
+export const useBranding = () =>
+  useQuery({
+    queryKey: ['branding'],
+    queryFn: () => api.get<BrandingDto>('/organization/branding'),
+  });
+export const useUpdateBranding = () =>
+  useOrgMutation((v: BrandingInput) => api.put<BrandingDto>('/organization/branding', v));
+
+export const useInvitation = (token: string) =>
+  useQuery({
+    queryKey: ['invitation', token],
+    queryFn: () => api.get<InvitationInfoDto>(`/auth/invitations/${token}`),
+    retry: false,
+  });
+export function useAcceptInvite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { token: string; password: string }) =>
+      api.post<UserDto>('/auth/accept-invite', v),
+    onSuccess: (u) => qc.setQueryData(['me'], u),
+  });
+}
 
 // ---- Admin -----------------------------------------------------------------
 export const useAdminOrgs = (enabled: boolean) =>

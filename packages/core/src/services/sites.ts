@@ -111,6 +111,20 @@ export async function updateSite(
     // Credenciales nuevas: el estado de Yoast ya no es fiable.
   }
   if (input.settings) {
+    // Funciones de pago: activarlas exige un plan que las incluya (desactivarlas siempre se puede).
+    const org = await deps.prisma.organization.findUniqueOrThrow({
+      where: { id: organizationId },
+      select: { plan: true },
+    });
+    const plan = planFor(org.plan);
+    if (
+      (input.settings.requireApproval && !plan.approvals) ||
+      (input.settings.autoRefresh && !plan.contentRefresh)
+    ) {
+      throw new AppError('PLAN_FEATURE_REQUIRED', `Plan ${plan.id} does not include this feature`, {
+        httpStatus: 402,
+      });
+    }
     const merged = { ...parseSettings(site.settings), ...input.settings };
     if (data['credentials']) merged.yoastMetaExposed = null;
     data['settings'] = merged;

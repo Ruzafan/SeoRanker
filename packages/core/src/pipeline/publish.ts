@@ -42,7 +42,12 @@ export function runPublish(ctx: PipelineContext, info: RunInfo): Promise<void> {
 
       const settings = parseSettings(site.settings);
       const keyword = article.keywordId ? await scope.keywords.findById(article.keywordId) : null;
-      const status = settings.autoPublish ? 'publish' : 'draft';
+      // Lo que ya está publicado en WordPress sigue publicado al actualizarlo; lo programado sale
+      // publicado al llegar su fecha; el resto, según la publicación automática.
+      const status =
+        settings.autoPublish || article.remoteStatus === 'publish' || article.scheduledFor
+          ? 'publish'
+          : 'draft';
       const schemaJson = buildArticleSchema({
         title: article.title,
         description: article.metaDescription,
@@ -96,6 +101,7 @@ export function runPublish(ctx: PipelineContext, info: RunInfo): Promise<void> {
           remotePostId: remoteId,
           remoteUrl,
           publishedAt: now,
+          ...(status === 'publish' ? { remoteStatus: 'publish' } : {}),
         },
       });
 

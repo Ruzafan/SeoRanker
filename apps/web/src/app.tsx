@@ -6,6 +6,10 @@ import { AdminPage } from './pages/admin';
 import { ArticleEditorPage } from './pages/article-editor';
 import { ArticlesPage } from './pages/articles';
 import { BillingPage } from './pages/billing';
+import { CalendarPage } from './pages/calendar';
+import { InvitePage } from './pages/invite';
+import { OrganizationPage } from './pages/organization';
+import { ReportPage } from './pages/report';
 import { BrandVoicePage } from './pages/brand-voice';
 import { DashboardPage } from './pages/dashboard';
 import { JobsPage } from './pages/jobs';
@@ -41,6 +45,7 @@ export function App() {
       <Route path="/comparativa/:slug" element={<ComparisonPage />} />
       <Route path="/tiendas/:slug" element={<VerticalPage />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/invite/:token" element={<InvitePage />} />
       <Route
         element={
           <RequireAuth>
@@ -53,6 +58,7 @@ export function App() {
         <Route path="/sites/new" element={<NewSitePage />} />
         <Route path="/admin" element={<AdminPage />} />
         <Route path="/billing" element={<BillingPage />} />
+        <Route path="/organization" element={<OrganizationPage />} />
       </Route>
       <Route
         path="/sites/:siteId"
@@ -67,6 +73,8 @@ export function App() {
         <Route path="keywords" element={<KeywordsPage />} />
         <Route path="articles" element={<ArticlesPage />} />
         <Route path="articles/:articleId" element={<ArticleEditorPage />} />
+        <Route path="calendar" element={<CalendarPage />} />
+        <Route path="report" element={<ReportPage />} />
         <Route path="voice" element={<BrandVoicePage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="jobs" element={<JobsPage />} />

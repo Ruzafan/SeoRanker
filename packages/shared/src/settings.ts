@@ -39,6 +39,10 @@ export const siteSettingsSchema = z.object({
   productCards: z.boolean(),
   /** Al publicarse un artículo, enlazarlo desde artículos antiguos relacionados. */
   autoBacklinks: z.boolean(),
+  /** Refrescar solo los artículos que pierden tráfico (planes con contentRefresh). */
+  autoRefresh: z.boolean(),
+  /** Exigir la aprobación de un cliente antes de publicar (planes con approvals). */
+  requireApproval: z.boolean(),
   /** null = aún no sabemos; false = Yoast no expone su meta por REST. Lo rellena el sistema. */
   yoastMetaExposed: z.boolean().nullable(),
   /** Plugin SEO detectado (Yoast o Rank Math). Lo rellena el sistema al probar la conexión. */
@@ -66,6 +70,8 @@ export const DEFAULT_SETTINGS: SiteSettings = {
   authorId: null,
   productCards: true,
   autoBacklinks: true,
+  autoRefresh: false,
+  requireApproval: false,
   yoastMetaExposed: null,
   seoPlugin: null,
   connectorVersion: null,
@@ -88,6 +94,8 @@ export const editableSettingsSchema = siteSettingsSchema
     authorId: true,
     productCards: true,
     autoBacklinks: true,
+    autoRefresh: true,
+    requireApproval: true,
   })
   .partial();
 

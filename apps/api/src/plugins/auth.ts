@@ -22,6 +22,10 @@ declare module 'fastify' {
   interface FastifyRequest {
     auth: AuthContext;
   }
+  interface FastifyContextConfig {
+    /** La ruta la puede usar un cliente (rol viewer) aunque no sea GET: revisar y comentar. */
+    viewerAllowed?: boolean;
+  }
 }
 
 export const COOKIE_NAME = 'token';
@@ -36,6 +40,8 @@ export interface AuthPluginOptions {
 
 export interface AuthHelpers {
   requireAuth: (req: FastifyRequest) => Promise<void>;
+  /** requireAuth + el rol viewer solo lee (salvo rutas marcadas viewerAllowed). */
+  requireWriter: (req: FastifyRequest) => Promise<void>;
   requireAdmin: (req: FastifyRequest) => Promise<void>;
   startSession: (reply: FastifyReply, userId: string) => Promise<void>;
   endSession: (reply: FastifyReply) => void;
@@ -73,6 +79,17 @@ export async function registerAuth(
     };
   };
 
+  const requireWriter = async (req: FastifyRequest): Promise<void> => {
+    await requireAuth(req);
+    if (
+      req.auth.role === 'viewer' &&
+      req.method !== 'GET' &&
+      !req.routeOptions.config.viewerAllowed
+    ) {
+      throw new AppError('FORBIDDEN', 'Read-only role', { httpStatus: 403 });
+    }
+  };
+
   const requireAdmin = async (req: FastifyRequest): Promise<void> => {
     await requireAuth(req);
     // 404 en vez de 403: no revelamos que la ruta existe.
@@ -101,5 +118,5 @@ export async function registerAuth(
     });
   };
 
-  return { requireAuth, requireAdmin, startSession, endSession };
+  return { requireAuth, requireWriter, requireAdmin, startSession, endSession };
 }

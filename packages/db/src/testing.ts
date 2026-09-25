@@ -40,6 +40,6 @@ export async function setupTestDatabase(
 
 export async function resetDatabase(prisma: PrismaClient): Promise<void> {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE "InternalLink","KeywordCluster","ArticleConversion","ArticleMetric","SearchConsoleConnection","UsageRecord","JobRun","Article","Keyword","Site","User","Organization" CASCADE',
+    'TRUNCATE "ArticleComment","Invitation","InternalLink","KeywordCluster","ArticleConversion","ArticleMetric","SearchConsoleConnection","UsageRecord","JobRun","Article","Keyword","Site","User","Organization" CASCADE',
   );
 }

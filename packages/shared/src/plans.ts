@@ -24,6 +24,10 @@ export interface PlanDef {
   aiVisibility: boolean;
   /** Ventas de WooCommerce atribuidas a los artículos. */
   revenueAttribution: boolean;
+  /** Refrescar artículos que pierden tráfico (manual o automático). */
+  contentRefresh: boolean;
+  /** Aprobación del cliente antes de publicar. */
+  approvals: boolean;
   features: string[];
 }
 
@@ -38,6 +42,8 @@ export const PLANS: Record<PlanId, PlanDef> = {
     whiteLabel: false,
     aiVisibility: false,
     revenueAttribution: false,
+    contentRefresh: false,
+    approvals: false,
     features: [
       '1 tienda',
       '3 artículos para probar',
@@ -56,6 +62,8 @@ export const PLANS: Record<PlanId, PlanDef> = {
     whiteLabel: false,
     aiVisibility: false,
     revenueAttribution: false,
+    contentRefresh: false,
+    approvals: false,
     features: [
       '1 tienda',
       '20 artículos al mes',
@@ -73,6 +81,8 @@ export const PLANS: Record<PlanId, PlanDef> = {
     whiteLabel: false,
     aiVisibility: true,
     revenueAttribution: true,
+    contentRefresh: true,
+    approvals: false,
     features: [
       'Hasta 5 tiendas',
       '100 artículos al mes',
@@ -91,6 +101,8 @@ export const PLANS: Record<PlanId, PlanDef> = {
     whiteLabel: true,
     aiVisibility: true,
     revenueAttribution: true,
+    contentRefresh: true,
+    approvals: true,
     features: [
       'Hasta 25 tiendas',
       '400 artículos al mes',
@@ -129,3 +141,8 @@ export const PLATFORMS: Record<PlatformId, { id: PlatformId; name: string; avail
 };
 
 export const AVAILABLE_PLATFORMS = PLATFORM_IDS.filter((p) => PLATFORMS[p].available);
+
+/** Roles de una organización: el cliente (viewer) lee, comenta y aprueba; no cambia nada más. */
+export const ROLES = ['owner', 'member', 'viewer'] as const;
+export type Role = (typeof ROLES)[number];
+export const INVITABLE_ROLES = ['member', 'viewer'] as const;

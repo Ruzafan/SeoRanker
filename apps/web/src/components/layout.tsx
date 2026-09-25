@@ -1,6 +1,9 @@
 import {
   BookOpenText,
+  CalendarDays,
+  ClipboardList,
   CreditCard,
+  Users,
   FileText,
   Gauge,
   KeyRound,
@@ -29,6 +32,8 @@ const siteNav: NavItem[] = [
   { to: 'performance', label: 'Rendimiento', icon: LineChart },
   { to: 'keywords', label: 'Keywords', icon: KeyRound },
   { to: 'articles', label: 'Artículos', icon: FileText },
+  { to: 'calendar', label: 'Calendario', icon: CalendarDays },
+  { to: 'report', label: 'Informe', icon: ClipboardList },
   { to: 'voice', label: 'Voz de marca', icon: Mic2 },
   { to: 'jobs', label: 'Trabajos', icon: ListChecks },
   { to: 'settings', label: 'Ajustes', icon: Settings },
@@ -40,7 +45,7 @@ function TopBar({ siteName }: { siteName?: string | undefined }) {
   const logout = useLogout();
   const navigate = useNavigate();
   return (
-    <header className="sticky top-0 z-20 border-b border-stone-200 bg-white/90 backdrop-blur dark:border-stone-800 dark:bg-stone-950/90">
+    <header className="sticky top-0 z-20 border-b border-stone-200 bg-white/90 backdrop-blur print:hidden dark:border-stone-800 dark:bg-stone-950/90">
       <div className="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4">
         <Link to="/sites" className="flex items-center gap-2 font-semibold tracking-tight">
           <BookOpenText className="h-5 w-5 text-teal-700 dark:text-teal-400" />
@@ -70,6 +75,14 @@ function TopBar({ siteName }: { siteName?: string | undefined }) {
               <Shield className="h-5 w-5" />
             </Link>
           )}
+          <Link
+            to="/organization"
+            className="rounded-lg p-2 text-stone-600 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800"
+            aria-label="Equipo y clientes"
+            title="Equipo y clientes"
+          >
+            <Users className="h-5 w-5" />
+          </Link>
           <Link
             to="/billing"
             className="rounded-lg p-2 text-stone-600 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800"
@@ -116,7 +129,10 @@ export function SiteLayout() {
     <div className="min-h-screen">
       <TopBar siteName={site?.name} />
       <div className="mx-auto flex max-w-6xl gap-8 px-4 py-6 sm:py-8">
-        <nav className="hidden w-48 shrink-0 md:block" aria-label="Secciones del sitio">
+        <nav
+          className="hidden w-48 shrink-0 print:hidden md:block"
+          aria-label="Secciones del sitio"
+        >
           <ul className="sticky top-20 space-y-1">
             {siteNav.map((i) => (
               <li key={i.to}>
@@ -142,7 +158,7 @@ export function SiteLayout() {
         <main className="min-w-0 flex-1 pb-20 md:pb-0">{isLoading ? <Spinner /> : <Outlet />}</main>
       </div>
       <nav
-        className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-7 border-t border-stone-200 bg-white/95 backdrop-blur dark:border-stone-800 dark:bg-stone-950/95 md:hidden"
+        className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-9 border-t print:hidden border-stone-200 bg-white/95 backdrop-blur dark:border-stone-800 dark:bg-stone-950/95 md:hidden"
         aria-label="Secciones del sitio"
       >
         {siteNav.map((i) => (

@@ -139,7 +139,7 @@ async function syncSearchConsole(ctx: PipelineContext, site: Site, now: Date): P
       10_000,
     );
     const opportunities = await storeOpportunities(ctx, site, queryRows, byUrl);
-    const decay = await detectDecay(ctx, site.id, dayStart(end));
+    const decay = await detectDecay(ctx, site, dayStart(end));
 
     await ctx.prisma.searchConsoleConnection.update({
       where: { id: conn.id },
@@ -327,9 +327,16 @@ async function storeOpportunities(
 /** Marca (o desmarca) los artículos publicados que pierden clics. */
 async function detectDecay(
   ctx: PipelineContext,
-  siteId: string,
+  site: Site,
   end: Date,
-): Promise<{ flagged: number; recovered: number }> {
+): Promise<{ flagged: number; recovered: number; refreshing: number }> {
+  const siteId = site.id;
+  const org = await ctx.prisma.organization.findUniqueOrThrow({
+    where: { id: site.organizationId },
+    select: { plan: true },
+  });
+  const autoRefresh = parseSettings(site.settings).autoRefresh && planFor(org.plan).contentRefresh;
+  let refreshing = 0;
   const recentFrom = new Date(end.getTime() - (DECAY_WINDOW_DAYS - 1) * DAY);
   const prevFrom = new Date(recentFrom.getTime() - DECAY_WINDOW_DAYS * DAY);
   const sums = async (from: Date, to: Date) =>
@@ -360,12 +367,16 @@ async function detectDecay(
     if (!a.decayDetectedAt && after < before * DECAY_RATIO) {
       await scope.articles.updateById(a.id, { decayDetectedAt: new Date() });
       flagged++;
+      if (autoRefresh) {
+        await ctx.dispatcher.enqueue('refresh', { siteId, refId: a.id }).catch(() => undefined);
+        refreshing++;
+      }
     } else if (a.decayDetectedAt && after >= before * RECOVERED_RATIO) {
       await scope.articles.updateById(a.id, { decayDetectedAt: null });
       recovered++;
     }
   }
-  return { flagged, recovered };
+  return { flagged, recovered, refreshing };
 }
 
 const METRICS_PER_SYNC = 300;

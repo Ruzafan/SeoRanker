@@ -62,6 +62,9 @@ export interface ArticleSummaryDto {
   remoteStatus: string | null;
   /** Fecha en que se detectó que pierde clics en Google; null si no. */
   decayDetectedAt: string | null;
+  scheduledFor: string | null;
+  reviewStatus: 'none' | 'pending' | 'approved' | 'changes_requested';
+  refreshedAt: string | null;
   publishedAt: string | null;
   updatedAt: string;
   createdAt: string;
@@ -86,6 +89,8 @@ export interface ArticleDto extends ArticleSummaryDto {
   /** Keyword objetivo (para el análisis on-page). */
   keyword: string | null;
   featuredMediaId: number | null;
+  /** Hay una versión anterior (tras un refresco) que se puede restaurar. */
+  hasPreviousVersion: boolean;
   /** Lo que posicionaba en Google al planificarlo (null si no había SerpAPI). */
   serp: {
     fetchedAt: string;
@@ -322,4 +327,72 @@ export interface ClusterDto {
   keywords: number;
   /** Keywords del cluster que ya tienen artículo. */
   done: number;
+}
+
+export interface CommentDto {
+  id: string;
+  kind: 'approve' | 'request_changes' | 'comment';
+  body: string;
+  author: string | null;
+  createdAt: string;
+}
+
+export interface MemberDto {
+  id: string;
+  email: string;
+  role: string;
+  isYou: boolean;
+}
+
+export interface InvitationDto {
+  id: string;
+  email: string;
+  role: string;
+  expiresAt: string;
+}
+
+export interface MembersDto {
+  members: MemberDto[];
+  invitations: InvitationDto[];
+  maxMembers: number | null;
+  canManage: boolean;
+}
+
+/** Enlace de invitación recién creado (el token solo se muestra una vez). */
+export interface InvitationLinkDto {
+  invitation: InvitationDto;
+  url: string;
+}
+
+export interface InvitationInfoDto {
+  organizationName: string;
+  email: string;
+  role: string;
+}
+
+export interface BrandingDto {
+  brandName: string | null;
+  brandLogoUrl: string | null;
+  brandColor: string | null;
+  /** El plan permite marca blanca. */
+  whiteLabel: boolean;
+}
+
+/** Informe mensual de una tienda (imprimible, con marca blanca en Agency). */
+export interface MonthlyReportDto {
+  site: { name: string; url: string };
+  month: string;
+  branding: BrandingDto;
+  published: { id: string; title: string; url: string | null; publishedAt: string }[];
+  search: {
+    clicks: number;
+    impressions: number;
+    previousClicks: number;
+    previousImpressions: number;
+    position: number | null;
+  } | null;
+  topArticles: { title: string; url: string | null; clicks: number; impressions: number }[];
+  revenue: { total: number; orders: number; currency: string | null } | null;
+  opportunities: { term: string; impressions: number; position: number | null }[];
+  refreshed: number;
 }

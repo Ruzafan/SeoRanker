@@ -26,6 +26,7 @@ import {
 } from '../lib/hooks';
 import { articleStatusLabel, errorText, parseJobError, warningMessages } from '../lib/i18n';
 import { OnPagePanel, SerpPanel } from '../components/onpage-panel';
+import { WorkflowPanel } from '../components/workflow-panel';
 
 const TITLE_MAX = 60;
 const META_MAX = 155;
@@ -252,6 +253,8 @@ export function ArticleEditorPage() {
         />
         {article.serp && <SerpPanel serp={article.serp} />}
       </div>
+
+      <WorkflowPanel siteId={siteId} article={article} />
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <Button

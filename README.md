@@ -169,6 +169,14 @@ La landing incluye una **demo sin registro** (`POST /api/v1/public/demo`): con l
 - **Canibalización** (`packages/core/src/keywords/similarity.ts`, léxica y sin coste): discover descarta candidatas casi idénticas entre sí o a un artículo existente, y antes de cada esquema se comprueba la keyword contra nuestros artículos y los posts del blog. Si choca, queda descartada con el motivo y el artículo con el que compite; _Recuperar_ la autoriza a propósito.
 - **Enlazado inverso** (trabajo `backlink`, ajuste _Enlazado inverso automático_): cuando un artículo pasa a estar publicado (al publicar con publicación automática, o cuando `sync` ve que lo publicaste en WordPress), se añade un enlace hacia él en hasta 3 artículos antiguos relacionados. Claude reescribe un solo párrafo; se valida que conserve su texto (≥ 85 %) y sus enlaces, y se actualiza primero en WordPress y después aquí. Queda registrado en `InternalLink` para no repetirlo.
 
+## Flujo editorial, equipo y clientes
+
+- **Refresco** (trabajo `refresh`, Pro y Agency): reescribe un artículo publicado con lo que posiciona hoy (SERP) y las **consultas reales de esa URL** en Search Console, conservando URL, título, enlaces y tarjetas de producto. La versión anterior queda guardada (_Deshacer refresco_). Con _Refrescar automáticamente_, `sync` lo lanza al detectar una caída. Cuenta como un artículo del mes. Al volver a publicarlo, un post ya publicado sigue publicado (antes volvía a borrador si no había publicación automática).
+- **Calendario**: arrastra artículos listos a un día; el planificador los publica esa mañana (`scheduledFor`), aunque no haya publicación automática.
+- **Aprobación del cliente** (Agency, ajuste _Exigir aprobación_): nada sale a WordPress (manual, automático ni programado) sin el visto bueno en el editor. Comentarios y decisiones quedan en `ArticleComment`.
+- **Equipo y clientes** (`/organization`): invitaciones por enlace de un solo uso (7 días; solo se guarda el hash del token), roles `member` y `viewer`. El cliente (`viewer`) lee todo, comenta y aprueba; cualquier otra escritura devuelve `FORBIDDEN` (lo aplica `requireWriter` en la API). El número de usuarios lo limita el plan.
+- **Informe mensual** (`/sites/:id/report`): publicados, clics e impresiones frente al mes anterior, artículos con más clics, ventas atribuidas y próximas oportunidades. Se descarga en PDF con la impresión del navegador. En Agency, con el nombre, logo y color de la agencia y sin mencionar SEO Autopilot.
+
 ## Rendimiento: Search Console y ventas
 
 La página _Rendimiento_ de cada tienda muestra clics, impresiones y posición reales de los artículos, cuáles pierden tráfico y las **oportunidades** (búsquedas por las que la tienda ya aparece entre las posiciones 8 y 20). Lo alimenta el trabajo `sync`, que el worker encola una vez al día por tienda (y el botón _Sincronizar_):

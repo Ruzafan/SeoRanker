@@ -26,6 +26,10 @@ export interface SearchAnalyticsQuery {
   startDate: string;
   endDate: string;
   dimensions: ('date' | 'page' | 'query')[];
+  /** Filtro opcional, p. ej. solo una página. */
+  dimensionFilterGroups?: {
+    filters: { dimension: 'page' | 'query'; operator: 'equals' | 'contains'; expression: string }[];
+  }[];
   rowLimit?: number;
   startRow?: number;
 }

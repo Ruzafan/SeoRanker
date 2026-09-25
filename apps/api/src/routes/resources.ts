@@ -11,6 +11,13 @@ import {
   discoverKeywords,
   generateFromKeyword,
   getArticleDto,
+  addComment,
+  getCalendar,
+  getMonthlyReport,
+  listComments,
+  refreshArticle,
+  restorePreviousVersion,
+  reviewArticle,
   getPerformance,
   getSearchConsoleStatus,
   listSearchConsoleProperties,
@@ -44,6 +51,10 @@ import {
 } from '@seo/core';
 import {
   articleQuerySchema,
+  calendarQuerySchema,
+  commentSchema,
+  reportQuerySchema,
+  reviewSchema,
   batchKeywordsSchema,
   createKeywordsSchema,
   createSiteSchema,
@@ -64,7 +75,7 @@ const idParam = z.object({ id: z.string().min(1).max(64) });
  */
 export function resourceRoutes(deps: CoreDeps, auth: AuthHelpers) {
   return async (app: FastifyInstance): Promise<void> => {
-    app.addHook('preHandler', auth.requireAuth);
+    app.addHook('preHandler', auth.requireWriter);
     const org = (req: { auth: { organizationId: string } }) => req.auth.organizationId;
     const map = <T, U>(
       page: { items: T[]; page: number; pageSize: number; total: number },
@@ -197,6 +208,46 @@ export function resourceRoutes(deps: CoreDeps, auth: AuthHelpers) {
     app.post('/articles/:id/regenerate', async (req, reply) => {
       const { id } = idParam.parse(req.params);
       return reply.status(202).send(await regenerateArticle(deps, org(req), id));
+    });
+
+    // ---- Flujo editorial ------------------------------------------------
+    app.post('/articles/:id/refresh', async (req, reply) => {
+      const { id } = idParam.parse(req.params);
+      return reply.status(202).send(await refreshArticle(deps, org(req), id));
+    });
+
+    app.post('/articles/:id/restore', async (req) => {
+      const { id } = idParam.parse(req.params);
+      await restorePreviousVersion(deps, org(req), id);
+      return getArticleDto(deps, org(req), id);
+    });
+
+    app.post('/articles/:id/review', { config: { viewerAllowed: true } }, async (req) => {
+      const { id } = idParam.parse(req.params);
+      await reviewArticle(deps, org(req), req.auth.userId, id, reviewSchema.parse(req.body));
+      return getArticleDto(deps, org(req), id);
+    });
+
+    app.get('/articles/:id/comments', async (req) => {
+      const { id } = idParam.parse(req.params);
+      return listComments(deps, org(req), id);
+    });
+
+    app.post('/articles/:id/comments', { config: { viewerAllowed: true } }, async (req, reply) => {
+      const { id } = idParam.parse(req.params);
+      const { body } = commentSchema.parse(req.body);
+      return reply.status(201).send(await addComment(deps, org(req), req.auth.userId, id, body));
+    });
+
+    app.get('/sites/:id/calendar', async (req) => {
+      const { id } = idParam.parse(req.params);
+      const q = calendarQuerySchema.parse(req.query);
+      return getCalendar(deps, org(req), id, new Date(q.from), new Date(q.to));
+    });
+
+    app.get('/sites/:id/report', async (req) => {
+      const { id } = idParam.parse(req.params);
+      return getMonthlyReport(deps, org(req), id, reportQuerySchema.parse(req.query).month);
     });
 
     // ---- Search Console, sincronización y rendimiento -----------------

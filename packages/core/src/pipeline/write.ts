@@ -141,11 +141,13 @@ export function runWrite(ctx: PipelineContext, info: RunInfo): Promise<void> {
         wordCount,
         status: 'ready',
         ...(featured ? { featuredMediaId: featured } : {}),
+        // Con aprobación obligatoria, el cliente tiene que darle el visto bueno antes de publicar.
+        ...(settings.requireApproval ? { reviewStatus: 'pending' } : {}),
       });
       if (article.keywordId) await scope.keywords.updateById(article.keywordId, { status: 'done' });
       await recordUsage(ctx.prisma, site.id, { articles: 1 });
 
-      if (info.chain === 'publish') {
+      if (info.chain === 'publish' && !settings.requireApproval) {
         await ctx.dispatcher.enqueue('publish', { siteId: site.id, refId: article.id });
       }
       return {

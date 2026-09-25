@@ -15,6 +15,52 @@ export interface SchedulerResult {
   generated: number;
   discovered: number;
   skipped: number;
+  /** Artículos programados enviados a publicar en este tick. */
+  scheduled: number;
+}
+
+/**
+ * Publica los artículos listos cuya fecha programada ya llegó (con la aprobación del cliente si el
+ * sitio la exige). Se marcan `publishing` al encolar para que el siguiente tick no los repita.
+ */
+async function publishDue(
+  ctx: PipelineContext,
+  sites: { id: string; settings: unknown }[],
+  now: Date,
+): Promise<number> {
+  let count = 0;
+  for (const site of sites) {
+    const settings = parseSettings(site.settings);
+    const due = await ctx.prisma.article.findMany({
+      where: {
+        siteId: site.id,
+        status: 'ready',
+        scheduledFor: { lte: now },
+        ...(settings.requireApproval ? { reviewStatus: 'approved' } : {}),
+      },
+      select: { id: true },
+    });
+    for (const a of due) {
+      await ctx.prisma.article.updateMany({
+        where: { id: a.id, siteId: site.id },
+        data: { status: 'publishing' },
+      });
+      try {
+        await ctx.dispatcher.enqueue('publish', { siteId: site.id, refId: a.id });
+        count++;
+      } catch (err) {
+        await ctx.prisma.article.updateMany({
+          where: { id: a.id, siteId: site.id },
+          data: { status: 'ready' },
+        });
+        ctx.log.warn(
+          { siteId: site.id, reason: errorCode(err) },
+          'scheduled publish failed to enqueue',
+        );
+      }
+    }
+  }
+  return count;
 }
 
 /**
@@ -27,8 +73,9 @@ export async function runScheduler(
   ctx: PipelineContext,
   now: Date = new Date(),
 ): Promise<SchedulerResult> {
-  const result: SchedulerResult = { generated: 0, discovered: 0, skipped: 0 };
+  const result: SchedulerResult = { generated: 0, discovered: 0, skipped: 0, scheduled: 0 };
   const sites = await ctx.prisma.site.findMany({ where: { active: true } });
+  result.scheduled = await publishDue(ctx, sites, now);
 
   for (const site of sites) {
     const settings = parseSettings(site.settings);

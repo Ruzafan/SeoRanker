@@ -39,6 +39,9 @@ export const errorMessages: Record<ErrorCode | 'NETWORK_ERROR', string> = {
   GOOGLE_AUTH_FAILED: 'Google rechazó el acceso o ha caducado. Vuelve a conectar Search Console.',
   GSC_NOT_CONNECTED: 'Conecta Search Console para ver esta información.',
   PLAN_FEATURE_REQUIRED: 'Tu plan no incluye esta función. Puedes ampliarlo en Plan y facturación.',
+  APPROVAL_REQUIRED: 'Este artículo necesita la aprobación del cliente antes de publicarse.',
+  MEMBER_LIMIT: 'Tu plan no admite más usuarios. Amplíalo o quita a alguien del equipo.',
+  INVITATION_INVALID: 'La invitación no existe, ya se usó o ha caducado. Pide un enlace nuevo.',
   QUOTA_EXCEEDED:
     'Has alcanzado el límite mensual de artículos de tu plan. Puedes ampliarlo en Plan y facturación.',
   AI_ERROR: 'Falló la llamada a Claude. Suele ser temporal; reintenta en unos minutos.',
@@ -110,6 +113,7 @@ export const jobTypeLabel: Record<JobType, string> = {
   sync: 'Sincronización (Google y tienda)',
   cluster: 'Agrupar en clusters',
   backlink: 'Enlazado inverso',
+  refresh: 'Refresco de contenido',
   watchdog: 'Vigilante',
   schedule: 'Programación',
 };

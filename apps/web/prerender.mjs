@@ -66,6 +66,8 @@ writeFileSync(
     'Disallow: /admin',
     'Disallow: /api/',
     'Disallow: /login',
+    'Disallow: /invite/',
+    'Disallow: /organization',
     '',
     `Sitemap: ${site}/sitemap.xml`,
     '',
