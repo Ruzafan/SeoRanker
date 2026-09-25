@@ -37,6 +37,40 @@ describe('ClaudeClient.callTool', () => {
     });
   });
 
+  it('usa strict tool use con un schema compatible (objetos cerrados, sin min/max)', async () => {
+    const nested = z.object({
+      title: z.string().min(5),
+      sections: z
+        .array(z.object({ heading: z.string().min(2), points: z.array(z.string()).min(1) }))
+        .min(3),
+    });
+    const { api, create } = fakeApi({
+      ...base,
+      stop_reason: 'tool_use',
+      content: [
+        {
+          type: 'tool_use',
+          id: '1',
+          name: 'submit_result',
+          input: {
+            title: 'Título',
+            sections: ['a', 'b', 'c'].map((h) => ({ heading: h + h, points: ['xx'] })),
+          },
+        },
+      ],
+    });
+    await new ClaudeClient(undefined, api).callTool({ ...input, schema: nested });
+    const tool = (create.mock.calls[0] as unknown as [Anthropic.MessageCreateParamsNonStreaming])[0]
+      .tools?.[0] as Anthropic.Tool;
+    expect(tool.strict).toBe(true);
+    const json = JSON.stringify(tool.input_schema);
+    expect(json).not.toMatch(/minLength|minItems|maxLength|maxItems/);
+    expect(tool.input_schema).toMatchObject({
+      additionalProperties: false,
+      properties: { sections: { items: { additionalProperties: false } } },
+    });
+  });
+
   it('lanza error explícito de truncamiento (no retryable)', async () => {
     const { api } = fakeApi({ ...base, stop_reason: 'max_tokens', content: [] });
     await expect(new ClaudeClient(undefined, api).callTool(input)).rejects.toMatchObject({

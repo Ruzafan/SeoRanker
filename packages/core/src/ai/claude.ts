@@ -32,13 +32,45 @@ export interface MessagesApi {
 
 const TOOL_NAME = 'submit_result';
 
+/** Restricciones que strict tool use no admite; zod las sigue validando al recibir la respuesta. */
+const UNSUPPORTED_STRICT_KEYWORDS = [
+  'minLength',
+  'maxLength',
+  'minimum',
+  'maximum',
+  'exclusiveMinimum',
+  'exclusiveMaximum',
+  'multipleOf',
+  'minItems',
+  'maxItems',
+  'pattern',
+];
+
+/** Adapta el JSON Schema a strict tool use: objetos cerrados y sin restricciones no soportadas. */
+function toStrictSchema(node: unknown): unknown {
+  if (Array.isArray(node)) return node.map(toStrictSchema);
+  if (node === null || typeof node !== 'object') return node;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(node)) {
+    if (UNSUPPORTED_STRICT_KEYWORDS.includes(key)) continue;
+    out[key] = key === 'properties' ? mapValues(value, toStrictSchema) : toStrictSchema(value);
+  }
+  if (out['type'] === 'object') out['additionalProperties'] = false;
+  return out;
+}
+
+function mapValues(value: unknown, fn: (v: unknown) => unknown): unknown {
+  if (value === null || typeof value !== 'object') return value;
+  return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, fn(v)]));
+}
+
 function toInputSchema(schema: z.ZodType): Anthropic.Tool.InputSchema {
   const json = z.toJSONSchema(schema, { io: 'input' }) as Record<string, unknown>;
   delete json['$schema'];
   if (json['type'] !== 'object') {
     throw new Error('El schema de un tool debe ser un objeto');
   }
-  return json as unknown as Anthropic.Tool.InputSchema;
+  return toStrictSchema(json) as Anthropic.Tool.InputSchema;
 }
 
 /** Traduce errores del SDK: 429/5xx/conexión se reintentan, el resto de 4xx no. */
@@ -107,6 +139,8 @@ export class ClaudeClient {
           {
             name: TOOL_NAME,
             description: input.toolDescription,
+            // Sin strict, el modelo a veces devuelve arrays anidados como string JSON.
+            strict: true,
             input_schema: toInputSchema(input.schema),
           },
         ],
