@@ -3,3 +3,5 @@
 .env
 .git
 *.log
+key
+key.pub
