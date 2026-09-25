@@ -163,6 +163,12 @@ La landing incluye una **demo sin registro** (`POST /api/v1/public/demo`): con l
 - **Análisis on-page** en el editor (`analyzeOnPage` en `@seo/shared`): keyword en título/meta/URL/intro/H2, densidad, longitudes, enlaces internos, FAQ y longitud de frase.
 - Tablas permitidas para comparativas.
 
+### Clusters, canibalización y enlazado inverso
+
+- **Clusters** (trabajo `cluster`, se lanza tras cada discover con keywords nuevas o con _Reagrupar_): Claude agrupa las keywords por tema y elige la **pilar** (la más amplia). El planificador escribe primero las pilares, después los satélites de temas cuya pilar ya existe y por último el resto; cada artículo enlaza a los de su cluster y a su pilar.
+- **Canibalización** (`packages/core/src/keywords/similarity.ts`, léxica y sin coste): discover descarta candidatas casi idénticas entre sí o a un artículo existente, y antes de cada esquema se comprueba la keyword contra nuestros artículos y los posts del blog. Si choca, queda descartada con el motivo y el artículo con el que compite; _Recuperar_ la autoriza a propósito.
+- **Enlazado inverso** (trabajo `backlink`, ajuste _Enlazado inverso automático_): cuando un artículo pasa a estar publicado (al publicar con publicación automática, o cuando `sync` ve que lo publicaste en WordPress), se añade un enlace hacia él en hasta 3 artículos antiguos relacionados. Claude reescribe un solo párrafo; se valida que conserve su texto (≥ 85 %) y sus enlaces, y se actualiza primero en WordPress y después aquí. Queda registrado en `InternalLink` para no repetirlo.
+
 ## Rendimiento: Search Console y ventas
 
 La página _Rendimiento_ de cada tienda muestra clics, impresiones y posición reales de los artículos, cuáles pierden tráfico y las **oportunidades** (búsquedas por las que la tienda ya aparece entre las posiciones 8 y 20). Lo alimenta el trabajo `sync`, que el worker encola una vez al día por tienda (y el botón _Sincronizar_):

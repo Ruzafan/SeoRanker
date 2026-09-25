@@ -28,6 +28,8 @@ const PIPELINE_TYPES: PipelineJobType[] = [
   'write',
   'publish',
   'sync',
+  'cluster',
+  'backlink',
 ];
 const WATCHDOG_EVERY_MS = 10 * 60_000;
 const SCHEDULER_EVERY_MS = 15 * 60_000;

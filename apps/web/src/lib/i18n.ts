@@ -108,6 +108,8 @@ export const jobTypeLabel: Record<JobType, string> = {
   publish: 'Publicación',
   'brand-voice': 'Voz de marca',
   sync: 'Sincronización (Google y tienda)',
+  cluster: 'Agrupar en clusters',
+  backlink: 'Enlazado inverso',
   watchdog: 'Vigilante',
   schedule: 'Programación',
 };

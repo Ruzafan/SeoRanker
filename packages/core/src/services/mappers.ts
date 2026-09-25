@@ -44,6 +44,9 @@ export function toKeywordDto(k: Keyword): KeywordDto {
     gscImpressions: k.gscImpressions,
     gscClicks: k.gscClicks,
     gscPosition: k.gscPosition,
+    clusterId: k.clusterId,
+    discardReason: k.discardReason,
+    similarToArticleId: k.similarToArticleId,
     createdAt: k.createdAt.toISOString(),
   };
 }

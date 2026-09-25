@@ -621,6 +621,8 @@ describe.skipIf(!db)('API (integración con Postgres)', () => {
         ['post', `/api/v1/sites/${site.id}/test-connection`],
         ['post', `/api/v1/sites/${site.id}/analyze-voice`],
         ['get', `/api/v1/sites/${site.id}/authors`],
+        ['get', `/api/v1/sites/${site.id}/clusters`],
+        ['post', `/api/v1/sites/${site.id}/clusters/rebuild`],
         ['get', `/api/v1/sites/${site.id}/keywords`],
         ['post', `/api/v1/sites/${site.id}/keywords`, { terms: ['intruso'] }],
         ['post', `/api/v1/sites/${site.id}/keywords/discover`],

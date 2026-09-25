@@ -109,7 +109,16 @@ export function runPublish(ctx: PipelineContext, info: RunInfo): Promise<void> {
           });
         }
       }
-      return { meta: { remotePostId: remoteId, remoteUrl, wpStatus: status, warnings } };
+      // Publicado de verdad (no borrador): enlazarlo desde artículos antiguos relacionados.
+      const backlinks = status === 'publish' && settings.autoBacklinks;
+      if (backlinks) {
+        await ctx.dispatcher
+          .enqueue('backlink', { siteId: site.id, refId: article.id })
+          .catch(() => undefined);
+      }
+      return {
+        meta: { remotePostId: remoteId, remoteUrl, wpStatus: status, warnings, backlinks },
+      };
     },
     {
       onFailure: async (_err, willRetry) => {

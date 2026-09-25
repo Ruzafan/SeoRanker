@@ -5,6 +5,8 @@ import { runDiscover } from './discover.js';
 import { runOutline } from './outline.js';
 import { runPublish } from './publish.js';
 import { runSync } from './sync.js';
+import { runCluster } from './cluster.js';
+import { runBacklink } from './backlink.js';
 import { runWrite } from './write.js';
 
 export * from './context.js';
@@ -23,6 +25,8 @@ const RUNNERS: Record<PipelineJobType, (ctx: PipelineContext, info: RunInfo) => 
   write: runWrite,
   publish: runPublish,
   sync: runSync,
+  cluster: runCluster,
+  backlink: runBacklink,
 };
 
 export function runPipelineJob(

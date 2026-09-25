@@ -1,4 +1,14 @@
-import { ArrowDown, ArrowUp, Ban, Compass, KeyRound, Plus, Sparkles, Trash2 } from 'lucide-react';
+import {
+  ArrowDown,
+  ArrowUp,
+  Ban,
+  Compass,
+  KeyRound,
+  Layers,
+  Plus,
+  Sparkles,
+  Trash2,
+} from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { KEYWORD_SOURCES, KEYWORD_STATUSES, type KeywordStatus } from '@seo/shared';
@@ -18,11 +28,13 @@ import {
 import {
   useAddKeywords,
   useBatchKeywords,
+  useClusters,
   useDeleteKeyword,
   useDiscover,
   useGenerate,
   useKeywords,
   usePatchKeyword,
+  useRebuildClusters,
   useSite,
   withToast,
   type KeywordFilters,
@@ -44,6 +56,10 @@ export function KeywordsPage() {
   const [params] = useSearchParams();
   const [status, setStatus] = useState<KeywordStatus | ''>('');
   const [source, setSource] = useState(params.get('source') ?? '');
+  const [clusterId, setClusterId] = useState('');
+  const clusters = useClusters(siteId);
+  const rebuild = useRebuildClusters(siteId);
+  const clusterName = new Map(clusters.data?.map((c) => [c.id, c.name]));
   const [searchInput, setSearchInput] = useState('');
   const search = useDebounced(searchInput);
   const [sort, setSort] = useState<KeywordFilters['sort']>('score');
@@ -56,6 +72,7 @@ export function KeywordsPage() {
   const filters: KeywordFilters = {
     ...(status ? { status } : {}),
     ...(source ? { source } : {}),
+    ...(clusterId ? { clusterId } : {}),
     ...(search ? { search } : {}),
     sort,
     order,
@@ -69,8 +86,8 @@ export function KeywordsPage() {
   const del = useDeleteKeyword(siteId);
   const generate = useGenerate(siteId);
 
-  useEffect(() => setPage(1), [status, source, search, sort, order]);
-  useEffect(() => setSelected(new Set()), [status, source, search, page]);
+  useEffect(() => setPage(1), [status, source, clusterId, search, sort, order]);
+  useEffect(() => setSelected(new Set()), [status, source, clusterId, search, page]);
 
   const items = data?.items ?? [];
   const allSelected = items.length > 0 && items.every((k) => selected.has(k.id));
@@ -155,6 +172,60 @@ export function KeywordsPage() {
           </div>
         </Card>
       )}
+
+      <div className="mb-4 rounded-xl border border-stone-200 p-3 dark:border-stone-800">
+        <div className="flex flex-wrap items-center gap-2">
+          <Layers className="h-4 w-4 text-stone-500" />
+          <span className="text-sm font-medium">Clusters</span>
+          <span className="text-xs text-stone-500">
+            Primero se escribe la guía pilar de cada tema y después sus artículos, enlazados entre
+            sí.
+          </span>
+          <Button
+            variant="ghost"
+            className="ml-auto"
+            loading={rebuild.isPending}
+            onClick={() => void withToast(rebuild.mutateAsync(), 'Reagrupando keywords…')}
+          >
+            Reagrupar
+          </Button>
+        </div>
+        {(clusters.data?.length ?? 0) > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              onClick={() => setClusterId('')}
+              className={cx(
+                'rounded-full border px-2.5 py-1 text-xs',
+                !clusterId
+                  ? 'border-teal-600 text-teal-800 dark:text-teal-300'
+                  : 'border-stone-200 dark:border-stone-700',
+              )}
+            >
+              Todos
+            </button>
+            {clusters.data?.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => setClusterId(c.id === clusterId ? '' : c.id)}
+                title={c.pillar ? `Pilar: ${c.pillar.term}` : undefined}
+                className={cx(
+                  'rounded-full border px-2.5 py-1 text-xs',
+                  c.id === clusterId
+                    ? 'border-teal-600 text-teal-800 dark:text-teal-300'
+                    : 'border-stone-200 dark:border-stone-700',
+                )}
+              >
+                {c.name}{' '}
+                <span className="tabular-nums text-stone-500">
+                  {c.done}/{c.keywords}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div className="mb-3 flex flex-col gap-2 sm:flex-row">
         <input
@@ -342,7 +413,27 @@ export function KeywordsPage() {
                         {keywordSourceLabel[k.source as keyof typeof keywordSourceLabel] ??
                           k.source}
                         {k.seedTerm ? ` · de «${k.seedTerm}»` : ''}
+                        {k.clusterId && clusterName.get(k.clusterId)
+                          ? ` · ${clusterName.get(k.clusterId)}`
+                          : ''}
                       </span>
+                      {k.discardReason === 'CANNIBALIZATION' && (
+                        <span className="mt-1 block text-xs text-amber-700 dark:text-amber-400">
+                          Descartada: ya hay{' '}
+                          {k.similarToArticleId ? (
+                            <Link
+                              to={`../articles/${k.similarToArticleId}`}
+                              relative="path"
+                              className="underline"
+                            >
+                              un artículo
+                            </Link>
+                          ) : (
+                            'un post en tu blog'
+                          )}{' '}
+                          para esta búsqueda. «Recuperar» la escribe igualmente.
+                        </span>
+                      )}
                     </td>
                     <td className="p-3 tabular-nums">{k.score}</td>
                     <td className="hidden p-3 tabular-nums md:table-cell">

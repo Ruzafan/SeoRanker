@@ -15,6 +15,8 @@ import {
   getSearchConsoleStatus,
   listSearchConsoleProperties,
   listSiteAuthors,
+  listClusters,
+  rebuildClusters,
   selectSearchConsoleProperty,
   disconnectSearchConsole,
   startGoogleConnect,
@@ -128,6 +130,16 @@ export function resourceRoutes(deps: CoreDeps, auth: AuthHelpers) {
     app.post('/sites/:id/keywords/discover', async (req, reply) => {
       const { id } = idParam.parse(req.params);
       return reply.status(202).send(await discoverKeywords(deps, org(req), id));
+    });
+
+    app.get('/sites/:id/clusters', async (req) => {
+      const { id } = idParam.parse(req.params);
+      return listClusters(deps, org(req), id);
+    });
+
+    app.post('/sites/:id/clusters/rebuild', async (req, reply) => {
+      const { id } = idParam.parse(req.params);
+      return reply.status(202).send(await rebuildClusters(deps, org(req), id));
     });
 
     app.post('/sites/:id/keywords/batch', async (req) => {

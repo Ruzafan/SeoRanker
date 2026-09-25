@@ -54,6 +54,7 @@ function fakeClaude(overrides: Partial<Record<string, () => unknown>> = {}): Cla
       profile: 'x'.repeat(250),
     }),
     'Submit the evaluation of every candidate keyword.': () => ({ keywords: [] }),
+    'Submit the topic clusters.': () => ({ clusters: [] }),
     ...overrides,
   };
   return {
@@ -445,14 +446,15 @@ describe.skipIf(!db)('pipeline (integración con Postgres)', () => {
       data: { settings: { ...DEFAULT_SETTINGS, seeds: ['figuras'] } },
     });
     const fetchFn = vi.fn(
-      async () => new Response(JSON.stringify(['q', ['figuras a', 'figuras b', 'figuras c']])),
+      async () =>
+        new Response(JSON.stringify(['q', ['figuras anime', 'figuras marvel', 'figuras disney']])),
     );
     const claude = fakeClaude({
       'Submit the evaluation of every candidate keyword.': () => ({
         keywords: [
-          { term: 'figuras a', keep: true, score: 150.6, intent: 'navigational' },
-          { term: 'figuras b', keep: true, score: -3, intent: 'Commercial' },
-          { term: 'figuras c', keep: true, score: 40, intent: '' },
+          { term: 'figuras anime', keep: true, score: 150.6, intent: 'navigational' },
+          { term: 'figuras marvel', keep: true, score: -3, intent: 'Commercial' },
+          { term: 'figuras disney', keep: true, score: 40, intent: '' },
         ],
       }),
     });
@@ -462,9 +464,9 @@ describe.skipIf(!db)('pipeline (integración con Postgres)', () => {
     const by = Object.fromEntries(
       (await prisma.keyword.findMany({ where: { siteId } })).map((k) => [k.term, k]),
     );
-    expect(by['figuras a']).toMatchObject({ score: 100, intent: null });
-    expect(by['figuras b']).toMatchObject({ score: 0, intent: 'commercial' });
-    expect(by['figuras c']).toMatchObject({ score: 40, intent: null });
+    expect(by['figuras anime']).toMatchObject({ score: 100, intent: null });
+    expect(by['figuras marvel']).toMatchObject({ score: 0, intent: 'commercial' });
+    expect(by['figuras disney']).toMatchObject({ score: 40, intent: null });
   });
 
   it('discover sin seeds las deduce del contenido, las guarda y sigue', async () => {

@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
-import { applyProductCards, extractFaq, sanitizeArticleHtml } from './html.js';
+import {
+  applyProductCards,
+  extractFaq,
+  listParagraphs,
+  replaceParagraph,
+  sanitizeArticleHtml,
+  validateLinkedParagraph,
+} from './html.js';
 import { blendScore, DataForSeoProvider, demandScore } from './keywords/metrics.js';
 import { extractStructure, fetchSerp, medianWordCount } from './keywords/serp.js';
 import { buildArticleSchema } from './seo/schema.js';
@@ -181,5 +188,45 @@ describe('métricas de keywords', () => {
     expect(blendScore(80, { volume: 1000, difficulty: 10, cpc: null })).toBe(
       Math.round(0.6 * 80 + 0.4 * easy),
     );
+  });
+});
+
+describe('enlazado inverso: validación del párrafo', () => {
+  const original =
+    '<p>Para exponer tus figuras conviene una vitrina cerrada y <a href="https://t.es/peanas">peanas</a> estables lejos del sol.</p>';
+  const target = 'https://t.es/limpiar-figuras';
+  it('acepta el párrafo con un enlace nuevo y el texto casi intacto', () => {
+    const ok = validateLinkedParagraph(
+      original,
+      `<p>Para exponer tus figuras conviene una vitrina cerrada y <a href="https://t.es/peanas">peanas</a> estables lejos del sol; y si ya tienen polvo, mira <a href="${target}">cómo limpiar figuras</a>.</p>`,
+      target,
+    );
+    expect(ok).toContain(`<a href="${target}">cómo limpiar figuras</a>`);
+  });
+  it('rechaza reescrituras, enlaces perdidos, varios párrafos o sin enlace', () => {
+    expect(
+      validateLinkedParagraph(
+        original,
+        `<p>Texto totalmente nuevo con <a href="${target}">enlace</a>.</p>`,
+        target,
+      ),
+    ).toBeNull();
+    expect(
+      validateLinkedParagraph(
+        original,
+        `<p>Para exponer tus figuras conviene una vitrina cerrada y peanas estables lejos del sol, <a href="${target}">guía</a>.</p>`,
+        target,
+      ),
+    ).toBeNull();
+    expect(
+      validateLinkedParagraph(original, `${original}<p><a href="${target}">x</a></p>`, target),
+    ).toBeNull();
+    expect(validateLinkedParagraph(original, original, target)).toBeNull();
+  });
+  it('listParagraphs + replaceParagraph sustituyen solo ese párrafo', () => {
+    const html = '<h2>A</h2><p>uno</p><p>dos</p>';
+    const ps = listParagraphs(html);
+    expect(ps.map((p) => p.html)).toEqual(['<p>uno</p>', '<p>dos</p>']);
+    expect(replaceParagraph(html, ps[1]!, '<p>DOS</p>')).toBe('<h2>A</h2><p>uno</p><p>DOS</p>');
   });
 });

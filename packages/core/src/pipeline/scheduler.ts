@@ -41,10 +41,7 @@ export async function runScheduler(
     });
     if (last && now.getTime() - last.createdAt.getTime() < interval) continue;
 
-    const keyword = await ctx.prisma.keyword.findFirst({
-      where: { siteId: site.id, status: 'pending' },
-      orderBy: [{ score: 'desc' }, { createdAt: 'asc' }],
-    });
+    const keyword = await pickNextKeyword(ctx, site.id);
 
     try {
       if (keyword) {
@@ -76,6 +73,39 @@ export async function runScheduler(
     }
   }
   return result;
+}
+
+/**
+ * Orden de escritura con clusters: primero las pilares (la guía amplia de cada tema), después los
+ * satélites de temas cuya pilar ya existe (así enlazan hacia ella) y por último el resto por puntuación.
+ */
+export async function pickNextKeyword(ctx: PipelineContext, siteId: string) {
+  const order = [{ score: 'desc' as const }, { createdAt: 'asc' as const }];
+  const clusters = await ctx.prisma.keywordCluster.findMany({
+    where: { siteId },
+    select: { id: true, pillarKeywordId: true },
+  });
+  const pillarIds = clusters.map((c) => c.pillarKeywordId).filter((id): id is string => !!id);
+  if (pillarIds.length) {
+    const pillar = await ctx.prisma.keyword.findFirst({
+      where: { siteId, status: 'pending', id: { in: pillarIds } },
+      orderBy: order,
+    });
+    if (pillar) return pillar;
+    const donePillars = await ctx.prisma.keyword.findMany({
+      where: { siteId, id: { in: pillarIds }, status: 'done' },
+      select: { clusterId: true },
+    });
+    const ready = donePillars.map((p) => p.clusterId).filter((id): id is string => !!id);
+    if (ready.length) {
+      const satellite = await ctx.prisma.keyword.findFirst({
+        where: { siteId, status: 'pending', clusterId: { in: ready } },
+        orderBy: order,
+      });
+      if (satellite) return satellite;
+    }
+  }
+  return ctx.prisma.keyword.findFirst({ where: { siteId, status: 'pending' }, orderBy: order });
 }
 
 async function mark(

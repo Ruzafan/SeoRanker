@@ -56,11 +56,37 @@ export function runWrite(ctx: PipelineContext, info: RunInfo): Promise<void> {
       const settings = parseSettings(site.settings);
 
       // Enlazado interno: solo URLs reales del sitio. Si el sitio no responde seguimos sin enlaces y lo anotamos.
-      let links: InternalLink[] = [];
+      const links: InternalLink[] = [];
       let linksWarning: string | undefined;
+      // Artículos publicados del mismo cluster (la pilar primero): el enlazado temático refuerza el tema.
+      let pillar: InternalLink | null = null;
+      if (keyword?.clusterId) {
+        const cluster = await ctx.prisma.keywordCluster.findFirst({
+          where: { id: keyword.clusterId, siteId: site.id },
+        });
+        const siblings = await scope.articles.findMany({
+          where: {
+            id: { not: article.id },
+            remoteStatus: 'publish',
+            keyword: { clusterId: keyword.clusterId },
+          },
+          select: { title: true, remoteUrl: true, keywordId: true },
+          take: 10,
+        });
+        for (const s of siblings) {
+          if (!s.remoteUrl) continue;
+          const link = { title: s.title, url: s.remoteUrl };
+          if (s.keywordId && s.keywordId === cluster?.pillarKeywordId) pillar = link;
+          else links.push(link);
+        }
+        if (pillar) links.unshift(pillar);
+      }
       try {
         const content = await adapterFor(ctx, site).listContent(MAX_LINKS);
-        links = content.map((c) => ({ title: c.title, url: c.url }));
+        const seen = new Set(links.map((l) => l.url));
+        links.push(
+          ...content.filter((c) => !seen.has(c.url)).map((c) => ({ title: c.title, url: c.url })),
+        );
       } catch (err) {
         linksWarning = errorCode(err);
         ctx.log.warn({ siteId: site.id, code: linksWarning }, 'internal links unavailable');
@@ -85,6 +111,7 @@ export function runWrite(ctx: PipelineContext, info: RunInfo): Promise<void> {
           outline,
           wordCount: settings.wordCount,
           links,
+          pillar,
           products: products.map((p): ProductOption => ({
             id: p.id,
             name: p.name,

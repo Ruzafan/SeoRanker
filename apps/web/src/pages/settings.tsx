@@ -48,6 +48,7 @@ const formSchema = z.object({
   expertise: z.string().max(3000, 'Máximo 3000 caracteres'),
   authorId: z.string(),
   productCards: z.boolean(),
+  autoBacklinks: z.boolean(),
   active: z.boolean(),
 });
 type FormValues = z.infer<typeof formSchema>;
@@ -68,6 +69,7 @@ const toForm = (s: SiteDto): FormValues => ({
   expertise: s.settings.expertise ?? '',
   authorId: s.settings.authorId ? String(s.settings.authorId) : '',
   productCards: s.settings.productCards,
+  autoBacklinks: s.settings.autoBacklinks,
   active: s.active,
 });
 
@@ -117,6 +119,7 @@ export function SettingsPage() {
         expertise: v.expertise.trim() || null,
         authorId: v.authorId ? Number(v.authorId) : null,
         productCards: v.productCards,
+        autoBacklinks: v.autoBacklinks,
       },
     };
     // Las credenciales solo se envían si el usuario escribe algo; en blanco = mantener las guardadas.
@@ -357,6 +360,21 @@ export function SettingsPage() {
               </datalist>
             </Field>
           </div>
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="mt-0.5 rounded border-stone-300 text-teal-700 focus:ring-teal-600"
+              {...register('autoBacklinks')}
+            />
+            <span>
+              Enlazado inverso automático
+              <span className="block text-xs text-stone-500">
+                Cuando un artículo se publica, añadimos un enlace hacia él en hasta 3 artículos
+                antiguos relacionados (un solo párrafo, sin cambiar el resto) y los actualizamos en
+                WordPress.
+              </span>
+            </span>
+          </label>
           <label className="flex items-start gap-2 text-sm">
             <input
               type="checkbox"

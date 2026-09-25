@@ -6,6 +6,7 @@ import type {
   ArticleSummaryDto,
   BatchResultDto,
   BillingDto,
+  ClusterDto,
   CheckoutResultDto,
   PaidPlanId,
   PerformanceDto,
@@ -186,6 +187,7 @@ export function useRefreshWhenIdle(siteId: string) {
 export interface KeywordFilters {
   status?: string;
   source?: string;
+  clusterId?: string;
   search?: string;
   sort: 'score' | 'createdAt' | 'term' | 'volume' | 'gscImpressions';
   order: 'asc' | 'desc';
@@ -210,6 +212,14 @@ function useSiteMutation<V, R>(siteId: string, fn: (v: V) => Promise<R>) {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['site', siteId] }),
   });
 }
+
+export const useClusters = (siteId: string) =>
+  useQuery({
+    queryKey: ['site', siteId, 'clusters'],
+    queryFn: () => api.get<ClusterDto[]>(`/sites/${siteId}/clusters`),
+  });
+export const useRebuildClusters = (siteId: string) =>
+  useSiteMutation(siteId, () => api.post<EnqueuedDto>(`/sites/${siteId}/clusters/rebuild`));
 
 export const useAddKeywords = (siteId: string) =>
   useSiteMutation(siteId, (terms: string[]) =>

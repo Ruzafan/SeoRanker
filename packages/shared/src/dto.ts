@@ -42,6 +42,10 @@ export interface KeywordDto {
   gscImpressions: number | null;
   gscClicks: number | null;
   gscPosition: number | null;
+  clusterId: string | null;
+  /** CANNIBALIZATION si se descartó sola por chocar con un artículo existente. */
+  discardReason: string | null;
+  similarToArticleId: string | null;
   createdAt: string;
 }
 
@@ -309,4 +313,13 @@ export interface DemoResultDto {
   platform: 'woocommerce' | 'wordpress' | 'unknown';
   topics: string[];
   keywords: { term: string; topic: string; question: boolean }[];
+}
+
+export interface ClusterDto {
+  id: string;
+  name: string;
+  pillar: { keywordId: string; term: string; status: string } | null;
+  keywords: number;
+  /** Keywords del cluster que ya tienen artículo. */
+  done: number;
 }

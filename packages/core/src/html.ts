@@ -148,3 +148,62 @@ export function extractFaq(html: string): FaqItem[] {
     })
     .filter((f) => f.question.length > 3 && f.answer.length > 10);
 }
+
+export interface Paragraph {
+  index: number;
+  start: number;
+  end: number;
+  html: string;
+  words: number;
+}
+
+/** Párrafos <p> de un HTML ya saneado, con su posición para poder sustituirlos. */
+export function listParagraphs(html: string): Paragraph[] {
+  return [...html.matchAll(/<p>[\s\S]*?<\/p>/g)].map((m, index) => ({
+    index,
+    start: m.index ?? 0,
+    end: (m.index ?? 0) + m[0].length,
+    html: m[0],
+    words: countWords(m[0]),
+  }));
+}
+
+export function replaceParagraph(html: string, p: Paragraph, replacement: string): string {
+  return html.slice(0, p.start) + replacement + html.slice(p.end);
+}
+
+const wordSet = (html: string): Set<string> =>
+  new Set(
+    stripHtml(html)
+      .toLowerCase()
+      .split(/[^\p{L}\p{N}]+/u)
+      .filter(Boolean),
+  );
+
+/**
+ * Valida la reescritura de un párrafo para añadir un enlace interno: debe ser un único <p>, llevar
+ * exactamente un enlace al destino, conservar los enlaces que ya tenía y casi todo su texto.
+ * Devuelve el párrafo saneado o null si no pasa.
+ */
+export function validateLinkedParagraph(
+  original: string,
+  candidate: string,
+  targetUrl: string,
+): string | null {
+  const existing = new Set(extractLinks(original));
+  const clean = sanitizeArticleHtml(candidate, new Set([...existing, targetUrl]));
+  if (!/^<p>[\s\S]*<\/p>$/.test(clean) || (clean.match(/<p>/g) ?? []).length !== 1) return null;
+  const links = extractLinks(clean);
+  if (links.filter((l) => l === targetUrl).length !== 1) return null;
+  if ([...existing].some((l) => !links.includes(l))) return null;
+  const before = wordSet(original);
+  const after = wordSet(clean);
+  let kept = 0;
+  for (const w of before) if (after.has(w)) kept++;
+  // Como mucho una frase corta nueva: 90 caracteres o el 40 % del párrafo, lo que sea mayor.
+  const originalLength = stripHtml(original).length;
+  const added = stripHtml(clean).length - originalLength;
+  return kept / Math.max(1, before.size) >= 0.85 && added <= Math.max(90, originalLength * 0.4)
+    ? clean
+    : null;
+}

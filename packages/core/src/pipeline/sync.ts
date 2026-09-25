@@ -70,7 +70,9 @@ async function syncPosts(ctx: PipelineContext, site: Site): Promise<unknown> {
     articles.map((a) => a.remotePostId).filter((id): id is number => id !== null),
   );
   const byId = new Map(infos.map((i) => [i.id, i]));
+  const settings = parseSettings(site.settings);
   let updated = 0;
+  let wentLive = 0;
   for (const a of articles) {
     const info = a.remotePostId === null ? undefined : byId.get(a.remotePostId);
     const next = info
@@ -79,9 +81,19 @@ async function syncPosts(ctx: PipelineContext, site: Site): Promise<unknown> {
     if (next.remoteUrl !== a.remoteUrl || next.remoteStatus !== a.remoteStatus) {
       await scope.articles.updateById(a.id, next);
       updated++;
+      if (
+        next.remoteStatus === 'publish' &&
+        a.remoteStatus !== 'publish' &&
+        settings.autoBacklinks
+      ) {
+        await ctx.dispatcher
+          .enqueue('backlink', { siteId: site.id, refId: a.id })
+          .catch(() => undefined);
+        wentLive++;
+      }
     }
   }
-  return { checked: articles.length, updated };
+  return { checked: articles.length, updated, wentLive };
 }
 
 async function syncSearchConsole(ctx: PipelineContext, site: Site, now: Date): Promise<unknown> {

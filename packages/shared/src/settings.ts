@@ -37,6 +37,8 @@ export const siteSettingsSchema = z.object({
   authorId: z.number().int().positive().nullable(),
   /** Recomendar productos de la tienda (WooCommerce) dentro de los artículos. */
   productCards: z.boolean(),
+  /** Al publicarse un artículo, enlazarlo desde artículos antiguos relacionados. */
+  autoBacklinks: z.boolean(),
   /** null = aún no sabemos; false = Yoast no expone su meta por REST. Lo rellena el sistema. */
   yoastMetaExposed: z.boolean().nullable(),
   /** Plugin SEO detectado (Yoast o Rank Math). Lo rellena el sistema al probar la conexión. */
@@ -63,6 +65,7 @@ export const DEFAULT_SETTINGS: SiteSettings = {
   expertise: null,
   authorId: null,
   productCards: true,
+  autoBacklinks: true,
   yoastMetaExposed: null,
   seoPlugin: null,
   connectorVersion: null,
@@ -84,6 +87,7 @@ export const editableSettingsSchema = siteSettingsSchema
     expertise: true,
     authorId: true,
     productCards: true,
+    autoBacklinks: true,
   })
   .partial();
 

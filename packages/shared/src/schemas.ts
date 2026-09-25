@@ -83,6 +83,7 @@ export const KEYWORD_SOURCES = ['manual', 'autocomplete', 'paa', 'gsc', 'import'
 export const keywordQuerySchema = z.object({
   status: z.enum(KEYWORD_STATUSES).optional(),
   source: z.enum(KEYWORD_SOURCES).optional(),
+  clusterId: z.string().min(1).max(64).optional(),
   search: z.string().trim().max(200).optional(),
   sort: z.enum(['score', 'createdAt', 'term', 'volume', 'gscImpressions']).default('score'),
   order: z.enum(['asc', 'desc']).default('desc'),
@@ -132,6 +133,8 @@ export const JOB_TYPES = [
   'publish',
   'brand-voice',
   'sync',
+  'cluster',
+  'backlink',
   'watchdog',
   'schedule',
 ] as const;

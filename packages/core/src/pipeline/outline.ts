@@ -9,8 +9,10 @@ import {
   OUTLINE_PROMPT_VERSION,
 } from '../ai/prompts/outline.js';
 import { fetchSerp, medianWordCount, type SerpSnapshot } from '../keywords/serp.js';
+import { findCannibal, type Target } from '../keywords/similarity.js';
+import { errorCode } from '../errors.js';
 import { siteScope } from '../tenant.js';
-import { loadSite, modelFor, siteContext } from './common.js';
+import { adapterFor, loadSite, modelFor, siteContext } from './common.js';
 import type { PipelineContext, RunInfo } from './context.js';
 import { runTracked } from './run-tracked.js';
 
@@ -44,6 +46,41 @@ export function runOutline(ctx: PipelineContext, info: RunInfo): Promise<void> {
           chain: info.chain,
         });
         return { meta: { skipped: true, articleId: existing.id, resumed: true } };
+      }
+
+      // Canibalización: si ya hay un artículo (nuestro o del blog) para la misma intención, no se
+      // escribe otro que competiría con él. El usuario puede forzarlo recuperando la keyword.
+      if (!keyword.allowSimilar) {
+        const ours = await ctx.prisma.article.findMany({
+          where: { siteId: site.id, OR: [{ keywordId: null }, { keywordId: { not: keyword.id } }] },
+          select: { id: true, title: true, keyword: { select: { term: true } } },
+        });
+        const targets: Target[] = ours.map((a) => ({
+          id: a.id,
+          texts: [a.title, ...(a.keyword ? [a.keyword.term] : [])],
+        }));
+        try {
+          const blog = await adapterFor(ctx, site).listContent(60);
+          blog
+            .filter((c) => c.type === 'post')
+            .forEach((c) => targets.push({ id: `wp:${c.url}`, texts: [c.title] }));
+        } catch (err) {
+          ctx.log.warn(
+            { siteId: site.id, code: errorCode(err) },
+            'blog posts unavailable for cannibalization check',
+          );
+        }
+        const clash = findCannibal(keyword.term, targets);
+        if (clash) {
+          await scope.keywords.updateById(keyword.id, {
+            status: 'discarded',
+            discardReason: 'CANNIBALIZATION',
+            similarToArticleId: clash.id.startsWith('wp:') ? null : clash.id,
+          });
+          return {
+            meta: { skipped: 'CANNIBALIZATION', similarTo: clash.id, similarText: clash.texts[0] },
+          };
+        }
       }
 
       await scope.keywords.updateById(keyword.id, { status: 'processing' });

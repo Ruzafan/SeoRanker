@@ -18,6 +18,7 @@ import {
 } from '../keywords/provider.js';
 import { siteScope } from '../tenant.js';
 import { blendScore, type KeywordMetrics } from '../keywords/metrics.js';
+import { dedupeSimilar, findCannibal, type Target } from '../keywords/similarity.js';
 import { loadSite, metricsProviderFor, modelFor, siteContext } from './common.js';
 import type { PipelineContext, RunInfo } from './context.js';
 import { runTracked } from './run-tracked.js';
@@ -87,6 +88,14 @@ export function runDiscover(ctx: PipelineContext, info: RunInfo): Promise<void> 
     const model = modelFor(ctx, site);
     const metricsProvider = metricsProviderFor(ctx);
     let withMetrics = 0;
+    let cannibalized = 0;
+    // Lo que ya tiene artículo: una keyword con la misma intención competiría con él en Google.
+    const covered: Target[] = (
+      await ctx.prisma.article.findMany({
+        where: { siteId: site.id },
+        select: { id: true, title: true, keyword: { select: { term: true } } },
+      })
+    ).map((a) => ({ id: a.id, texts: [a.title, ...(a.keyword ? [a.keyword.term] : [])] }));
     let inserted = 0;
     let discarded = 0;
     for (let i = 0; i < fresh.length; i += SCORE_BATCH) {
@@ -105,7 +114,13 @@ export function runDiscover(ctx: PipelineContext, info: RunInfo): Promise<void> 
       const rows = result.data.keywords
         .map((k) => ({ ...k, term: normalizeTerm(k.term) }))
         .filter((k) => wanted.has(k.term));
-      const kept = rows.filter((k) => k.keep);
+      const unique = dedupeSimilar(
+        rows
+          .filter((k) => k.keep)
+          .map((k) => ({ ...k, score: normalizeScore(k.score, k.intent).score })),
+      );
+      const kept = unique.filter((k) => !findCannibal(k.term, covered));
+      cannibalized += unique.length - kept.length;
       discarded += batch.length - kept.length;
       let metrics = new Map<string, KeywordMetrics>();
       if (metricsProvider && kept.length) {
@@ -156,6 +171,9 @@ export function runDiscover(ctx: PipelineContext, info: RunInfo): Promise<void> 
       },
     });
     const firstArticle = onboarding ? await startFirstArticle(ctx, site.id) : undefined;
+    // Keywords nuevas: se reagrupan los clusters (pilar + satélites).
+    if (inserted > 0)
+      await ctx.dispatcher.enqueue('cluster', { siteId: site.id }).catch(() => undefined);
 
     return {
       meta: {
@@ -167,6 +185,7 @@ export function runDiscover(ctx: PipelineContext, info: RunInfo): Promise<void> 
         inserted,
         discarded,
         withMetrics,
+        cannibalized,
         ...(firstArticle ? { firstArticle } : {}),
         prompt: SCORE_KEYWORDS_PROMPT_VERSION,
       },
