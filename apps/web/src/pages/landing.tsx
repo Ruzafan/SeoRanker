@@ -1,10 +1,9 @@
 import {
   ArrowRight,
-  BookOpenText,
   Compass,
   FileText,
-  Globe,
   Info,
+  LineChart as LineChartIcon,
   Mic2,
   PenLine,
   PlugZap,
@@ -14,13 +13,15 @@ import {
   Store,
   type LucideIcon,
 } from 'lucide-react';
-import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { PLANS, PLAN_IDS, PLATFORM_IDS, PLATFORMS } from '@seo/shared';
 import { BarChart, LineChart, SERIES_TONES } from '../components/charts';
-import { ThemeToggle } from '../components/theme';
+import { PrimaryCta, PublicLayout, SectionTitle } from '../components/public-layout';
 import { Badge, Button, cx } from '../components/ui';
 import { useMe } from '../lib/hooks';
+import { LANDING_FAQS } from '../public/content';
+import { DemoSection } from '../public/demo-section';
+import { RoiCalculator } from '../public/roi-calculator';
 
 /**
  * DATOS ILUSTRATIVOS. No son resultados medidos: sirven para enseñar la forma de la curva
@@ -45,83 +46,22 @@ export function LandingPage() {
   const loggedIn = !!me;
 
   return (
-    <div className="min-h-screen bg-stone-50 text-stone-900 dark:bg-stone-950 dark:text-stone-100">
-      <Nav loggedIn={loggedIn} />
-      <main>
-        <Hero loggedIn={loggedIn} />
-        <HowItWorks />
-        <Results />
-        <Features />
-        <Platforms />
-        <Pricing loggedIn={loggedIn} />
-        <Faq />
-        <FinalCta loggedIn={loggedIn} />
-      </main>
-      <footer className="border-t border-stone-200 py-8 text-center text-sm text-stone-500 dark:border-stone-800">
-        © {new Date().getFullYear()} SEO Autopilot · seoranker.tech
-      </footer>
-    </div>
+    <PublicLayout>
+      <Hero />
+      <DemoSection />
+      <HowItWorks />
+      <Results />
+      <Features />
+      <Platforms />
+      <RoiCalculator />
+      <Pricing loggedIn={loggedIn} />
+      <Faq />
+      <FinalCta loggedIn={loggedIn} />
+    </PublicLayout>
   );
 }
 
-function PrimaryCta({ loggedIn, children }: { loggedIn: boolean; children?: ReactNode }) {
-  return (
-    <Link to={loggedIn ? '/app' : '/login'}>
-      <Button size="lg" icon={ArrowRight}>
-        {loggedIn ? 'Ir al panel' : (children ?? 'Empezar gratis')}
-      </Button>
-    </Link>
-  );
-}
-
-function Nav({ loggedIn }: { loggedIn: boolean }) {
-  return (
-    <header className="sticky top-0 z-20 border-b border-stone-200/70 bg-stone-50/85 backdrop-blur dark:border-stone-800/70 dark:bg-stone-950/85">
-      <div className="mx-auto flex h-14 max-w-6xl items-center gap-6 px-4">
-        <Link to="/" className="flex items-center gap-2 font-semibold tracking-tight">
-          <BookOpenText className="h-5 w-5 text-teal-700 dark:text-teal-400" />
-          SEO Autopilot
-        </Link>
-        <nav className="hidden gap-5 text-sm text-stone-600 dark:text-stone-400 md:flex">
-          <a href="#como-funciona" className="hover:text-stone-900 dark:hover:text-white">
-            Cómo funciona
-          </a>
-          <a href="#resultados" className="hover:text-stone-900 dark:hover:text-white">
-            Resultados
-          </a>
-          <a href="#precios" className="hover:text-stone-900 dark:hover:text-white">
-            Precios
-          </a>
-          <a href="#faq" className="hover:text-stone-900 dark:hover:text-white">
-            Preguntas
-          </a>
-        </nav>
-        <div className="ml-auto flex items-center gap-2">
-          <ThemeToggle />
-          {loggedIn ? (
-            <Link to="/app">
-              <Button>Ir al panel</Button>
-            </Link>
-          ) : (
-            <>
-              <Link
-                to="/login"
-                className="hidden rounded-lg px-3 py-2 text-sm font-medium hover:bg-stone-100 dark:hover:bg-stone-800 sm:block"
-              >
-                Entrar
-              </Link>
-              <Link to="/login">
-                <Button>Empezar gratis</Button>
-              </Link>
-            </>
-          )}
-        </div>
-      </div>
-    </header>
-  );
-}
-
-function Hero({ loggedIn }: { loggedIn: boolean }) {
+function Hero() {
   return (
     <section className="mx-auto grid max-w-6xl grid-cols-1 items-center gap-10 px-4 [&>*]:min-w-0 pb-16 pt-14 md:grid-cols-2 md:pt-20">
       <div>
@@ -132,21 +72,21 @@ function Hero({ loggedIn }: { loggedIn: boolean }) {
           Más visitas orgánicas para tu tienda online, sin escribir una línea.
         </h1>
         <p className="mt-4 max-w-xl text-lg text-stone-600 dark:text-stone-400">
-          Conecta tu WooCommerce y SEO Autopilot descubre qué busca tu cliente, escribe artículos
-          con la voz de tu marca y los publica con el SEO de Yoast ya rellenado. Cada semana, en
-          todas tus tiendas.
+          Conecta tu WooCommerce y SEO Autopilot descubre qué busca tu cliente, estudia lo que ya
+          posiciona en Google, escribe con la voz de tu marca y publica con Yoast o Rank Math
+          rellenado. Después te enseña qué artículos traen clics y ventas.
         </p>
         <div className="mt-6 flex flex-wrap items-center gap-3">
-          <PrimaryCta loggedIn={loggedIn} />
+          <PrimaryCta />
           <a
-            href="#como-funciona"
+            href="#demo"
             className="rounded-lg px-4 py-2.5 text-sm font-medium text-stone-700 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800"
           >
-            Ver cómo funciona
+            Analiza tu tienda gratis
           </a>
         </div>
         <p className="mt-4 text-sm text-stone-500">
-          Sin tarjeta · Sin instalar plugins · Tú decides si publica solo o deja borradores
+          Sin tarjeta · Primer artículo en minutos · Tú decides si publica solo o deja borradores
         </p>
       </div>
       <HeroPreview />
@@ -191,31 +131,11 @@ function HeroPreview() {
   );
 }
 
-function SectionTitle({
-  eyebrow,
-  title,
-  children,
-}: {
-  eyebrow: string;
-  title: string;
-  children?: ReactNode;
-}) {
-  return (
-    <div className="mx-auto mb-10 max-w-2xl text-center">
-      <p className="text-sm font-semibold uppercase tracking-wide text-teal-700 dark:text-teal-400">
-        {eyebrow}
-      </p>
-      <h2 className="mt-2 text-3xl font-semibold tracking-tight">{title}</h2>
-      {children && <p className="mt-3 text-stone-600 dark:text-stone-400">{children}</p>}
-    </div>
-  );
-}
-
 const steps: { icon: LucideIcon; title: string; text: string }[] = [
   {
     icon: PlugZap,
     title: 'Conecta tu tienda',
-    text: 'URL y contraseña de aplicación de WordPress. Nada que instalar; las credenciales se guardan cifradas.',
+    text: 'URL y contraseña de aplicación de WordPress, cifradas. Un plugin opcional de un clic rellena Yoast o Rank Math.',
   },
   {
     icon: Compass,
@@ -225,12 +145,12 @@ const steps: { icon: LucideIcon; title: string; text: string }[] = [
   {
     icon: PenLine,
     title: 'Escribimos con tu voz',
-    text: 'Claude aprende el tono de tu marca y redacta artículos completos, con estructura, FAQ y enlaces a tus productos.',
+    text: 'Estudiamos el top 10 de Google y Claude redacta con tu voz: estructura, tablas, FAQ y tus productos.',
   },
   {
     icon: Send,
     title: 'Publicamos con SEO',
-    text: 'Título, slug, meta description y keyword de Yoast rellenados. Publica solo o deja borradores para revisar.',
+    text: 'Meta SEO, datos estructurados y autor rellenados. Después medimos clics, posiciones y ventas por artículo.',
   },
 ];
 
@@ -352,33 +272,33 @@ function Results() {
 const features: { icon: LucideIcon; title: string; text: string }[] = [
   {
     icon: Compass,
-    title: 'Keywords sin configurar nada',
-    text: 'Deducimos los temas de tu catálogo y los ampliamos con autocompletado y "La gente también pregunta".',
-  },
-  {
-    icon: Mic2,
-    title: 'Tu voz, no la de un robot',
-    text: 'Analizamos tus textos publicados y escribimos con el mismo tono, vocabulario y estilo.',
+    title: 'Keywords con datos',
+    text: 'Deducimos los temas de tu catálogo, añadimos volumen y dificultad, y detectamos en Search Console las búsquedas en las que ya asomas.',
   },
   {
     icon: FileText,
-    title: 'Artículos completos',
-    text: 'Estructura pensada para la intención de búsqueda, FAQ y enlaces internos solo a páginas que existen.',
+    title: 'Mejor que lo que ya posiciona',
+    text: 'Cada esquema parte del top 10 de Google: cubre lo que todos tratan y añade lo que falta. Con tablas, FAQ y enlaces solo a páginas reales.',
   },
   {
     icon: Store,
-    title: 'Todas tus tiendas en un panel',
-    text: 'Gestiona varias tiendas a la vez: cada una con sus keywords, su voz y su calendario.',
+    title: 'Tus productos, con botón de compra',
+    text: 'Recomendamos los productos que encajan con tarjetas de WooCommerce con precio real, y la foto como imagen destacada.',
+  },
+  {
+    icon: LineChartIcon,
+    title: 'Resultados medibles',
+    text: 'Clics y posición por artículo, alertas de artículos que pierden tráfico y ventas que empezaron en tu blog.',
+  },
+  {
+    icon: Mic2,
+    title: 'Tu voz y tu experiencia',
+    text: 'Aprendemos el tono de tus textos y usamos la experiencia real de tu negocio, sin inventar nada.',
   },
   {
     icon: ShieldCheck,
     title: 'Tú tienes el control',
-    text: 'Borradores para revisar o publicación automática. Edita cualquier artículo antes de que salga.',
-  },
-  {
-    icon: Globe,
-    title: 'En tu idioma y mercado',
-    text: 'Contenido nativo por idioma y país, sin traducciones literales.',
+    text: 'Borradores, publicación automática o aprobación del cliente, con un análisis SEO de cada artículo en el editor.',
   },
 ];
 
@@ -498,36 +418,13 @@ function Pricing({ loggedIn }: { loggedIn: boolean }) {
   );
 }
 
-const faqs = [
-  {
-    q: '¿Google penaliza el contenido escrito con IA?',
-    a: 'Google valora que el contenido sea útil, no cómo se ha escrito. Por eso cada artículo responde a una búsqueda concreta, sigue la voz de tu marca y enlaza solo a páginas reales. Y siempre puedes revisarlo antes de publicar.',
-  },
-  {
-    q: '¿Tengo que instalar algo en WordPress?',
-    a: 'No. Usamos la API oficial de WordPress con una contraseña de aplicación, que puedes revocar cuando quieras. Para rellenar los campos de Yoast basta con un pequeño fragmento que te damos.',
-  },
-  {
-    q: '¿Publica solo o puedo revisar antes?',
-    a: 'Tú eliges por tienda: dejar borradores en WordPress para revisarlos o publicar automáticamente con la frecuencia que marques.',
-  },
-  {
-    q: '¿Cuándo se notan los resultados?',
-    a: 'El SEO es acumulativo: los primeros artículos suelen empezar a posicionar en semanas y el efecto crece a medida que publicas. Depende de tu sector y de la competencia de cada búsqueda.',
-  },
-  {
-    q: '¿Y si tengo Shopify?',
-    a: 'Estamos preparando la integración con Shopify. Mientras tanto, SEO Autopilot funciona con WordPress y WooCommerce.',
-  },
-];
-
 function Faq() {
   return (
     <section id="faq" className="scroll-mt-16 py-20">
       <div className="mx-auto max-w-3xl px-4">
         <SectionTitle eyebrow="Preguntas" title="Preguntas frecuentes" />
         <div className="divide-y divide-stone-200 rounded-2xl border border-stone-200 bg-white dark:divide-stone-800 dark:border-stone-800 dark:bg-stone-900">
-          {faqs.map((f) => (
+          {LANDING_FAQS.map((f) => (
             <details key={f.q} className="group p-5">
               <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-medium">
                 {f.q}

@@ -83,6 +83,13 @@ export class AutocompleteProvider implements KeywordProvider {
     return [...found.values()];
   }
 
+  /** Sugerencias para una consulta concreta, con la misma pausa y corte por rate limit que expand. */
+  async suggestions(query: string, ctx: ExpandContext): Promise<string[]> {
+    if (this.requests > 0) await this.deps.sleep(250 + Math.floor(this.deps.random() * 250));
+    this.requests++;
+    return this.fetchSuggestions(query, ctx);
+  }
+
   private async fetchSuggestions(query: string, ctx: ExpandContext): Promise<string[]> {
     const url =
       'https://suggestqueries.google.com/complete/search?client=firefox' +

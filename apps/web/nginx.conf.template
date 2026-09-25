@@ -17,8 +17,9 @@ server {
     add_header Cache-Control "public, immutable";
   }
 
+  # Páginas públicas prerenderizadas (/ejemplo → /ejemplo/index.html); el resto es el panel (SPA).
   location / {
     add_header Cache-Control "no-cache";
-    try_files $uri /index.html;
+    try_files $uri $uri/index.html /app.html;
   }
 }

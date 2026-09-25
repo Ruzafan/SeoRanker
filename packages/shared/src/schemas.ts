@@ -156,3 +156,6 @@ export const googleCallbackSchema = z.object({
   code: z.string().min(1).max(2000).optional(),
   error: z.string().max(200).optional(),
 });
+
+// ---- Público ----------------------------------------------------------------
+export const demoSchema = z.object({ url: z.string().trim().min(4).max(300) });

@@ -12,6 +12,7 @@ import { JobsPage } from './pages/jobs';
 import { KeywordsPage } from './pages/keywords';
 import { LandingPage } from './pages/landing';
 import { LoginPage } from './pages/login';
+import { ComparisonPage, ExampleArticlePage, VerticalPage } from './public/pages';
 import { PerformancePage } from './pages/performance';
 import { SettingsPage } from './pages/settings';
 import { HomeRedirect, NewSitePage, SitesPage } from './pages/sites';
@@ -36,6 +37,9 @@ export function App() {
   return (
     <Routes>
       <Route path="/" element={<LandingPage />} />
+      <Route path="/ejemplo" element={<ExampleArticlePage />} />
+      <Route path="/comparativa/:slug" element={<ComparisonPage />} />
+      <Route path="/tiendas/:slug" element={<VerticalPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route
         element={

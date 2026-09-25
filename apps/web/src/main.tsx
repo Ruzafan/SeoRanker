@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StrictMode } from 'react';
-import { createRoot } from 'react-dom/client';
+import { createRoot, hydrateRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { App } from './app';
@@ -15,7 +15,7 @@ const queryClient = new QueryClient({
 const root = document.getElementById('root');
 if (!root) throw new Error('No se encontró #root');
 
-createRoot(root).render(
+const tree = (
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
@@ -23,5 +23,9 @@ createRoot(root).render(
       </BrowserRouter>
       <Toaster richColors closeButton position="top-right" />
     </QueryClientProvider>
-  </StrictMode>,
+  </StrictMode>
 );
+
+// Páginas públicas prerenderizadas (landing, ejemplo…): se hidratan. El panel arranca vacío.
+if (root.hasChildNodes()) hydrateRoot(root, tree);
+else createRoot(root).render(tree);

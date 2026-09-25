@@ -105,6 +105,8 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+      args:
+        PUBLIC_SITE_URL: ${PUBLIC_SITE_URL:-https://seoranker.tech}
     restart: unless-stopped
     environment:
       API_UPSTREAM: http://api:3000

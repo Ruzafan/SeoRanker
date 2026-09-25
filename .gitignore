@@ -6,3 +6,5 @@ dist
 coverage
 key
 key.pub
+
+dist-ssr

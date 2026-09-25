@@ -23,3 +23,4 @@ export * from './services/admin.js';
 export * from './services/billing.js';
 export * from './services/search-console.js';
 export * from './services/performance.js';
+export * from './services/demo.js';

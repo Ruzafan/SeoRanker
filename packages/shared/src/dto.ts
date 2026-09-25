@@ -301,3 +301,12 @@ export interface PerformanceDto {
   /** El plan incluye ventas atribuidas. */
   revenueEnabled: boolean;
 }
+
+/** Demo pública de la landing: temas y búsquedas reales de una tienda a partir de su URL. */
+export interface DemoResultDto {
+  url: string;
+  siteName: string | null;
+  platform: 'woocommerce' | 'wordpress' | 'unknown';
+  topics: string[];
+  keywords: { term: string; topic: string; question: boolean }[];
+}

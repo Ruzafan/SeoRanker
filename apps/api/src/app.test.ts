@@ -758,6 +758,21 @@ describe.skipIf(!db)('API (integración con Postgres)', () => {
     });
   });
 
+  describe('demo pública', () => {
+    it('sin sesión, valida la URL y bloquea destinos privados', async () => {
+      allowPrivate = false;
+      await app.close();
+      await makeApp();
+      const anon = request(app.server);
+      expect((await anon.post('/api/v1/public/demo').send({})).body.error.code).toBe(
+        'VALIDATION_ERROR',
+      );
+      const res = await anon.post('/api/v1/public/demo').send({ url: 'http://127.0.0.1:8080' });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_URL');
+    });
+  });
+
   describe('Search Console (OAuth)', () => {
     const google = {
       clientId: 'cid',

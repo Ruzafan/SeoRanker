@@ -147,6 +147,12 @@ Idempotentes, con `JobRun` al empezar y al acabar (duración, tokens, error), 3 
 
 Generar a mano (botón _Generar artículo_) se detiene en `ready` para que lo revises. La **cadencia automática** (Ajustes) genera cada día/semana la mejor keyword pendiente y la envía a WordPress (como borrador salvo que actives la publicación automática).
 
+## Web pública (landing)
+
+Las páginas públicas (`/`, `/ejemplo`, `/comparativa/*`, `/tiendas/*`, definidas en `apps/web/src/public/pages-meta.ts`) se **prerenderizan** en el build: `vite build --ssr` + `prerender.mjs` generan HTML indexable con su `<title>`, meta description, canonical, Open Graph y JSON-LD (SoftwareApplication y FAQPage), además de `sitemap.xml` y `robots.txt`. En el navegador se hidratan. El panel sigue siendo una SPA servida desde `app.html` (fallback de nginx). El dominio sale de `PUBLIC_SITE_URL` en el build.
+
+La landing incluye una **demo sin registro** (`POST /api/v1/public/demo`): con la URL de la tienda lee sus categorías públicas de WordPress/WooCommerce (o los encabezados de la portada) y muestra búsquedas reales de Google Autocomplete. Sin credenciales ni IA, cacheada 24 h por dominio y limitada a 6 peticiones/minuto por IP. También una calculadora de ahorro, un artículo de ejemplo y páginas de comparativa y por sector.
+
 ## Calidad de los artículos
 
 - **SERP antes del esquema** (`SERPAPI_KEY`): el top 10 de Google para la keyword, con los H2/H3 y la longitud de los 5 primeros, entra en el prompt del esquema (cubrir lo que todos tratan y añadir lo que falta). Se guarda en `Article.serp` y el editor lo muestra.
