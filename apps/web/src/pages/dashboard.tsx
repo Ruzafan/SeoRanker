@@ -74,12 +74,6 @@ export function DashboardPage() {
       hint: 'Usuario y contraseña de aplicación.',
     },
     {
-      done: seeds > 0,
-      label: 'Define tus keywords semilla',
-      to: 'settings',
-      hint: 'Los temas de tu tienda: de ahí salen las keywords.',
-    },
-    {
       done: !!site.brandVoice,
       label: 'Genera la voz de marca',
       to: 'voice',
@@ -89,7 +83,10 @@ export function DashboardPage() {
       done: stats.pendingKeywords > 0 || usage.articles > 0,
       label: 'Consigue keywords',
       to: 'keywords',
-      hint: 'Descúbrelas automáticamente o pégalas a mano.',
+      hint:
+        seeds > 0
+          ? 'Descúbrelas a partir de tus semillas o pégalas a mano.'
+          : 'Las deducimos del contenido de tu tienda; no hace falta configurar nada.',
     },
   ];
   const setupDone = steps.every((s) => s.done);

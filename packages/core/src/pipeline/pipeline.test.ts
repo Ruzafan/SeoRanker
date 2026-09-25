@@ -72,6 +72,7 @@ function fakeAdapter(): PublishingAdapter & { created: unknown[] } {
       { id: 1, title: 'Página OK', url: 'https://tienda.es/ok', type: 'page' },
     ],
     getSamples: async () => [{ title: 't', body: 'b'.repeat(200), type: 'post' }],
+    listCategories: async () => ['Figuras de resina'],
     createPost: async (input) => {
       created.push(input);
       return { id: 500, url: 'https://tienda.es/post-500', warnings: [] };
@@ -329,7 +330,38 @@ describe.skipIf(!db)('pipeline (integración con Postgres)', () => {
     expect(by['figuras c']).toMatchObject({ score: 40, intent: null });
   });
 
-  it('discover sin seeds falla con NO_SEEDS', async () => {
+  it('discover sin seeds las deduce del contenido, las guarda y sigue', async () => {
+    const fetchFn = vi.fn(
+      async () => new Response(JSON.stringify(['q', ['figuras de resina baratas']])),
+    );
+    const claude = fakeClaude({
+      'Submit the seed keywords that describe the store.': () => ({
+        seeds: [
+          { term: 'Figuras de Resina', reason: 'categoría principal' },
+          { term: 'figuras de resina', reason: 'duplicada' },
+          { term: 'dioramas', reason: 'productos' },
+        ],
+      }),
+      'Submit the evaluation of every candidate keyword.': () => ({
+        keywords: [
+          { term: 'figuras de resina baratas', keep: true, score: 70, intent: 'commercial' },
+        ],
+      }),
+    });
+    const ctx = { ...ctxWith(claude), fetchFn: fetchFn as unknown as typeof fetch };
+    await dispatcher.enqueue('discover', { siteId });
+    await drain(ctx);
+
+    const site = await prisma.site.findUniqueOrThrow({ where: { id: siteId } });
+    expect((site.settings as { seeds: string[] }).seeds).toEqual(['figuras de resina', 'dioramas']);
+    expect(await prisma.keyword.count({ where: { siteId } })).toBe(1);
+    const run = await prisma.jobRun.findFirstOrThrow({ where: { siteId, type: 'discover' } });
+    expect(run).toMatchObject({ status: 'succeeded', meta: { seedsGenerated: true, seeds: 2 } });
+  });
+
+  it('discover sin seeds ni contenido publicado falla con NO_SEEDS', async () => {
+    adapter.listContent = async () => [];
+    adapter.listCategories = async () => [];
     await dispatcher.enqueue('discover', { siteId });
     await expect(drain(ctxWith())).rejects.toMatchObject({ code: 'NO_SEEDS' });
   });
@@ -439,7 +471,7 @@ describe.skipIf(!db)('pipeline (integración con Postgres)', () => {
       expect((await runScheduler(ctx, tomorrow)).generated).toBe(1);
     });
 
-    it('cadencia off no hace nada; sin keywords ni seeds tampoco', async () => {
+    it('cadencia off no hace nada; sin keywords ni seeds lanza discover (las deduce)', async () => {
       await newKeyword('x', 'pending');
       expect((await runScheduler(ctxWith())).generated).toBe(0);
       await prisma.site.update({
@@ -447,7 +479,8 @@ describe.skipIf(!db)('pipeline (integración con Postgres)', () => {
         data: { settings: { ...DEFAULT_SETTINGS, cadence: 'daily' } },
       });
       await prisma.keyword.deleteMany({ where: { siteId } });
-      expect(await runScheduler(ctxWith())).toMatchObject({ generated: 0, discovered: 0 });
+      expect(await runScheduler(ctxWith())).toMatchObject({ generated: 0, discovered: 1 });
+      expect(dispatcher.queue.map((j) => j.type)).toEqual(['discover']);
     });
   });
 

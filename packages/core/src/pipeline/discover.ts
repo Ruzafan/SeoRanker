@@ -1,5 +1,4 @@
 import { parseSettings } from '@seo/shared';
-import { AppError } from '../errors.js';
 import {
   normalizeScore,
   scoreKeywordsSchema,
@@ -21,6 +20,7 @@ import { siteScope } from '../tenant.js';
 import { loadSite, modelFor, siteContext } from './common.js';
 import type { PipelineContext, RunInfo } from './context.js';
 import { runTracked } from './run-tracked.js';
+import { generateSeeds } from './seeds.js';
 
 const MAX_CANDIDATES = 300;
 const SCORE_BATCH = 60;
@@ -36,11 +36,12 @@ function httpDeps(ctx: PipelineContext): HttpDeps {
 export function runDiscover(ctx: PipelineContext, info: RunInfo): Promise<void> {
   return runTracked(ctx, info, async (tracker) => {
     const site = await loadSite(ctx, info.siteId);
-    const settings = parseSettings(site.settings);
-    if (settings.seeds.length === 0) {
-      throw new AppError('NO_SEEDS', 'The site has no seed keywords configured', {
-        httpStatus: 400,
-      });
+    let settings = parseSettings(site.settings);
+    // Sin seeds: se deducen del contenido de la tienda y se guardan (el usuario puede editarlas).
+    const seedsGenerated = settings.seeds.length === 0;
+    if (seedsGenerated) {
+      settings = { ...settings, seeds: await generateSeeds(ctx, site, tracker) };
+      await ctx.prisma.site.update({ where: { id: site.id }, data: { settings } });
     }
 
     const deps = httpDeps(ctx);
@@ -127,6 +128,7 @@ export function runDiscover(ctx: PipelineContext, info: RunInfo): Promise<void> 
     return {
       meta: {
         seeds: settings.seeds.length,
+        seedsGenerated,
         providers: providers.map((p) => p.name),
         candidates: candidates.size,
         scored: fresh.length,

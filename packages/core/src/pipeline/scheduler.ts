@@ -20,7 +20,8 @@ export interface SchedulerResult {
 /**
  * Tick de automatización: por cada sitio activo con cadencia, si toca, coge la keyword pendiente
  * de mayor score y lanza outline → write → publish (borrador en WP salvo autoPublish).
- * Si no quedan keywords y hay seeds, lanza un discover (como mucho una vez por semana).
+ * Si no quedan keywords, lanza un discover (como mucho una vez por semana); sin seeds, discover
+ * las deduce del contenido de la tienda.
  */
 export async function runScheduler(
   ctx: PipelineContext,
@@ -56,7 +57,8 @@ export async function runScheduler(
         });
         await mark(ctx, site.id, now, { action: 'generate', keywordId: keyword.id });
         result.generated++;
-      } else if (settings.seeds.length > 0) {
+      } else {
+        // Sin seeds también: discover las deduce del contenido de la tienda.
         const lastDiscover = settings.lastDiscoverAt ? Date.parse(settings.lastDiscoverAt) : 0;
         if (now.getTime() - lastDiscover >= DISCOVER_EVERY_MS) {
           await ctx.dispatcher.enqueue('discover', { siteId: site.id });
@@ -65,8 +67,6 @@ export async function runScheduler(
         } else {
           result.skipped++;
         }
-      } else {
-        result.skipped++;
       }
     } catch (err) {
       // Cuota agotada, Redis caído… se anota y se reintenta en el siguiente tick elegible.

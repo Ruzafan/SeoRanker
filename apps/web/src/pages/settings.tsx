@@ -259,7 +259,7 @@ export function SettingsPage() {
           <h2 className="font-medium">Contenido y automatización</h2>
           <Field
             label="Keywords semilla"
-            hint="Una por línea. De estas se descubren las demás (p. ej. «figuras de acción», «coleccionables anime»)."
+            hint="Opcional. Una por línea. Si lo dejas vacío, el primer descubrimiento las deduce del contenido de tu tienda y las verás aquí para ajustarlas."
             error={errors.seedsText?.message}
           >
             <textarea className={cx(inputClass, 'min-h-28')} {...register('seedsText')} />

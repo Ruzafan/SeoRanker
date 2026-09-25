@@ -39,6 +39,8 @@ export interface PublishingAdapter {
   testConnection(): Promise<ConnectionResult>;
   listContent(limit: number): Promise<ContentItem[]>;
   getSamples(limit: number): Promise<ContentSample[]>;
+  /** Nombres de categorías (de producto primero), las más usadas antes. Para deducir seeds. */
+  listCategories(limit: number): Promise<string[]>;
   createPost(
     input: CreatePostInput,
   ): Promise<{ id: number; url: string; warnings?: WarningCode[] }>;

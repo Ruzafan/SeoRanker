@@ -206,6 +206,26 @@ export class WordPressAdapter implements PublishingAdapter {
       .slice(0, limit);
   }
 
+  async listCategories(limit: number): Promise<string[]> {
+    // product_cat solo existe con WooCommerce; va primero porque describe mejor una tienda.
+    const groups = await Promise.all(
+      ['product_cat', 'categories'].map(async (taxonomy) => {
+        try {
+          const terms = await this.request<{ name?: string; slug?: string }[]>(
+            `/${taxonomy}?per_page=${Math.min(100, limit)}&hide_empty=true&orderby=count&order=desc&_fields=name,slug`,
+          );
+          return terms
+            .filter((t) => t.slug !== 'uncategorized' && t.slug !== 'sin-categoria')
+            .map((t) => stripHtml(t.name ?? ''));
+        } catch (err) {
+          if (err instanceof AppError && err.code === 'WP_REST_NOT_FOUND') return [];
+          throw err;
+        }
+      }),
+    );
+    return [...new Set(groups.flat().filter(Boolean))].slice(0, limit);
+  }
+
   async createPost(
     input: CreatePostInput,
   ): Promise<{ id: number; url: string; warnings?: WarningCode[] }> {

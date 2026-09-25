@@ -18,6 +18,9 @@ export class ShopifyAdapter implements PublishingAdapter {
   getSamples(_limit: number): Promise<ContentSample[]> {
     throw new NotImplementedError('ShopifyAdapter.getSamples');
   }
+  listCategories(_limit: number): Promise<string[]> {
+    throw new NotImplementedError('ShopifyAdapter.listCategories');
+  }
   createPost(_input: CreatePostInput): Promise<{ id: number; url: string }> {
     throw new NotImplementedError('ShopifyAdapter.createPost');
   }

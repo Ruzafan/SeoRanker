@@ -141,8 +141,12 @@ export async function discoverKeywords(
   siteId: string,
 ): Promise<EnqueuedDto> {
   const site = await requireSite(deps.prisma, organizationId, siteId);
-  if (parseSettings(site.settings).seeds.length === 0) {
-    throw new AppError('NO_SEEDS', 'Configure at least one seed keyword first', {
+  // Sin seeds, discover las deduce del contenido de la tienda: para eso necesita leerla.
+  if (
+    parseSettings(site.settings).seeds.length === 0 &&
+    !readCredentials(site.credentials, deps.encryptionKey)
+  ) {
+    throw new AppError('NO_CREDENTIALS', 'Site has no credentials to read its content', {
       httpStatus: 400,
     });
   }

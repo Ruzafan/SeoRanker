@@ -20,7 +20,8 @@ export const errorMessages: Record<ErrorCode | 'NETWORK_ERROR', string> = {
   WP_REST_NOT_FOUND:
     'No se encontró la API REST de WordPress en esa URL. Revisa la dirección y que los enlaces permanentes no estén en «Simple».',
   NO_CREDENTIALS: 'Este sitio no tiene credenciales de WordPress. Añádelas en Ajustes.',
-  NO_SEEDS: 'Añade al menos una keyword semilla en Ajustes antes de descubrir keywords.',
+  NO_SEEDS:
+    'No hay semillas ni contenido publicado del que deducirlas. Publica algo en la tienda o añade semillas en Ajustes.',
   INVALID_STATE: 'Esa acción no se puede hacer en el estado actual.',
   QUOTA_EXCEEDED: 'Has alcanzado el límite mensual de artículos de tu plan.',
   AI_ERROR: 'Falló la llamada a Claude. Suele ser temporal; reintenta en unos minutos.',

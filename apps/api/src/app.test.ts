@@ -460,14 +460,13 @@ describe.skipIf(!db)('API (integración con Postgres)', () => {
       );
     });
 
-    it('discover exige seeds y encola; analyze-voice encola', async () => {
+    it('discover encola sin seeds (se deducen del contenido); analyze-voice encola', async () => {
       const { agent, site } = await setup();
-      const noSeeds = await agent.post(`/api/v1/sites/${site.id}/keywords/discover`);
-      expect(noSeeds.body.error.code).toBe('NO_SEEDS');
+      expect((await agent.post(`/api/v1/sites/${site.id}/keywords/discover`)).status).toBe(202);
       await agent.patch(`/api/v1/sites/${site.id}`).send({ settings: { seeds: ['figuras'] } });
       expect((await agent.post(`/api/v1/sites/${site.id}/keywords/discover`)).status).toBe(202);
       expect((await agent.post(`/api/v1/sites/${site.id}/analyze-voice`)).status).toBe(202);
-      expect(dispatcher.calls.map((c) => c.type)).toEqual(['discover', 'brand-voice']);
+      expect(dispatcher.calls.map((c) => c.type)).toEqual(['discover', 'discover', 'brand-voice']);
     });
 
     it('artículos: edición saneada, publicar/regenerar encolan y respetan estados', async () => {

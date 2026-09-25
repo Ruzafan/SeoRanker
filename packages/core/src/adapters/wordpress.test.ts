@@ -66,6 +66,29 @@ describe('WordPressAdapter', () => {
     ]);
   });
 
+  it('listCategories: productos primero, sin "sin categoría" ni duplicados', async () => {
+    const { wp } = adapter((url) => {
+      if (url.includes('/product_cat?'))
+        return json([
+          { name: 'Figuras &amp; estatuas', slug: 'figuras' },
+          { name: 'Sin categoría', slug: 'sin-categoria' },
+        ]);
+      if (url.includes('/categories?'))
+        return json([
+          { name: 'Guías', slug: 'guias' },
+          { name: 'Figuras & estatuas', slug: 'figuras-2' },
+          { name: 'Uncategorized', slug: 'uncategorized' },
+        ]);
+      return json({}, 404);
+    });
+    expect(await wp.listCategories(10)).toEqual(['Figuras & estatuas', 'Guías']);
+
+    const noWoo = adapter((url) =>
+      url.includes('/categories?') ? json([{ name: 'Blog', slug: 'blog' }]) : json({}, 404),
+    );
+    expect(await noWoo.wp.listCategories(10)).toEqual(['Blog']);
+  });
+
   it('createPost: crea sin meta, aplica Yoast aparte y verifica leyendo de vuelta', async () => {
     const calls: { url: string; body: unknown }[] = [];
     const { wp } = adapter((url, init) => {

@@ -119,8 +119,7 @@ export function KeywordsPage() {
               variant="secondary"
               icon={Compass}
               loading={discover.isPending}
-              disabled={!hasSeeds}
-              title={hasSeeds ? undefined : 'Añade semillas en Ajustes'}
+              title={hasSeeds ? undefined : 'Sin semillas: se deducirán del contenido de tu tienda'}
               onClick={() =>
                 void withToast(
                   discover.mutateAsync(),
