@@ -2,6 +2,7 @@ import { Redis } from 'ioredis';
 import {
   BullDispatcher,
   createQueues,
+  createStripeBilling,
   parseEncryptionKey,
   redisConnectionFromUrl,
 } from '@seo/core';
@@ -18,6 +19,24 @@ async function main(): Promise<void> {
   const queues = createQueues(redisConnectionFromUrl(env.REDIS_URL));
   for (const q of Object.values(queues)) q.on('error', () => undefined);
 
+  const billing =
+    env.STRIPE_SECRET_KEY &&
+    env.STRIPE_WEBHOOK_SECRET &&
+    env.STRIPE_PRICE_STARTER &&
+    env.STRIPE_PRICE_PRO &&
+    env.STRIPE_PRICE_AGENCY
+      ? createStripeBilling(env.STRIPE_SECRET_KEY, {
+          webhookSecret: env.STRIPE_WEBHOOK_SECRET,
+          prices: {
+            starter: env.STRIPE_PRICE_STARTER,
+            pro: env.STRIPE_PRICE_PRO,
+            agency: env.STRIPE_PRICE_AGENCY,
+          },
+          webOrigin: env.WEB_ORIGIN,
+          automaticTax: env.STRIPE_AUTOMATIC_TAX,
+        })
+      : undefined;
+
   const app = await buildApp({
     env,
     core: {
@@ -28,6 +47,7 @@ async function main(): Promise<void> {
         allowPrivateHosts: env.ALLOW_PRIVATE_HOSTS,
         freePlanMaxArticles: env.FREE_PLAN_MAX_ARTICLES,
       },
+      billing,
     },
     boardQueues: Object.values(queues),
     health: {

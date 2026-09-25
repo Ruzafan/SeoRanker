@@ -5,6 +5,7 @@ import { useMe } from './lib/hooks';
 import { AdminPage } from './pages/admin';
 import { ArticleEditorPage } from './pages/article-editor';
 import { ArticlesPage } from './pages/articles';
+import { BillingPage } from './pages/billing';
 import { BrandVoicePage } from './pages/brand-voice';
 import { DashboardPage } from './pages/dashboard';
 import { JobsPage } from './pages/jobs';
@@ -46,6 +47,7 @@ export function App() {
         <Route path="/sites" element={<SitesPage />} />
         <Route path="/sites/new" element={<NewSitePage />} />
         <Route path="/admin" element={<AdminPage />} />
+        <Route path="/billing" element={<BillingPage />} />
       </Route>
       <Route
         path="/sites/:siteId"

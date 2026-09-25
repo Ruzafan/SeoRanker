@@ -6,7 +6,7 @@ import {
   type SitesOverviewDto,
   type UsageDto,
 } from '@seo/shared';
-import { articlesLimitForPlan } from '../pipeline/quota.js';
+import { articlesLimitForPlan, organizationArticlesThisMonth } from '../pipeline/quota.js';
 import { currentPeriod } from '../pipeline/usage.js';
 import { requireSite, siteScope } from '../tenant.js';
 import type { CoreDeps } from './deps.js';
@@ -49,6 +49,7 @@ export async function getUsage(
   return {
     period,
     articles: current?.articles ?? 0,
+    organizationArticles: await organizationArticlesThisMonth(deps.prisma, organizationId, period),
     inputTokens: current?.inputTokens ?? 0,
     outputTokens: current?.outputTokens ?? 0,
     costCents: current?.costCents ?? 0,
@@ -160,6 +161,7 @@ export async function getSitesOverview(
       articlesPerMonth: articlesLimitForPlan(org.plan, deps.config),
     },
     sitesCount: siteIds.length,
+    articlesThisMonth: usage.reduce((sum, u) => sum + u.articles, 0),
     sites: siteIds.map((id) => {
       const u = usage.find((r) => r.siteId === id);
       const f = failures.find((r) => r.siteId === id);

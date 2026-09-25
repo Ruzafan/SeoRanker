@@ -94,13 +94,16 @@ export interface Paginated<T> {
 
 export interface UsageDto {
   period: string;
+  /** Artículos de ESTA tienda este mes. */
   articles: number;
+  /** Artículos de toda la organización este mes: es lo que cuenta para el tope del plan. */
+  organizationArticles: number;
   inputTokens: number;
   outputTokens: number;
   costCents: number;
   plan: string;
-  /** null = sin tope. */
-  articlesLimit: number | null;
+  /** Tope mensual de la organización. */
+  articlesLimit: number;
   history: { period: string; articles: number; costCents: number }[];
 }
 
@@ -118,9 +121,12 @@ export interface SitesOverviewDto {
     id: string;
     name: string;
     maxSites: number | null;
-    articlesPerMonth: number | null;
+    /** Tope mensual de artículos de la organización (todas las tiendas). */
+    articlesPerMonth: number;
   };
   sitesCount: number;
+  /** Artículos generados este mes por toda la organización. */
+  articlesThisMonth: number;
   sites: SiteOverviewItem[];
 }
 
@@ -168,4 +174,32 @@ export interface OrganizationAdminDto {
     articles: number;
     keywords: number;
   }[];
+}
+
+/** Estado de facturación de la organización (página /billing). */
+export interface BillingDto {
+  /** false si el servidor no tiene Stripe configurado: el panel oculta los botones de pago. */
+  configured: boolean;
+  plan: string;
+  /** Estado de la suscripción en Stripe (active, past_due, canceled…); null si nunca pagó. */
+  status: string | null;
+  currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+  /** Hay cliente en Stripe: se puede abrir el portal (facturas, tarjeta, cancelar). */
+  hasCustomer: boolean;
+  /** Solo el propietario gestiona la facturación. */
+  canManage: boolean;
+  usage: {
+    articles: number;
+    articlesLimit: number;
+    sites: number;
+    maxSites: number | null;
+    members: number;
+    maxMembers: number | null;
+  };
+}
+
+/** url = página de Stripe a la que redirigir; null si el cambio de plan se aplicó directamente. */
+export interface CheckoutResultDto {
+  url: string | null;
 }

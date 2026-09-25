@@ -5,6 +5,9 @@ import type {
   ArticleDto,
   ArticleSummaryDto,
   BatchResultDto,
+  BillingDto,
+  CheckoutResultDto,
+  PaidPlanId,
   ConnectionTestDto,
   CreateSiteInput,
   EnqueuedDto,
@@ -262,6 +265,33 @@ export const useRegenerateArticle = (siteId: string, id: string) =>
   useArticleMutation(siteId, id, () => api.post<EnqueuedDto>(`/articles/${id}/regenerate`));
 export const useDeleteArticle = (siteId: string, id: string) =>
   useArticleMutation(siteId, id, () => api.delete(`/articles/${id}`));
+
+// ---- Facturación -------------------------------------------------------------
+export const useBilling = () =>
+  useQuery({ queryKey: ['billing'], queryFn: () => api.get<BillingDto>('/billing') });
+
+export function useCheckout() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (plan: PaidPlanId) => api.post<CheckoutResultDto>('/billing/checkout', { plan }),
+    onSuccess: (res) => {
+      if (res.url) window.location.assign(res.url);
+      else {
+        void qc.invalidateQueries({ queryKey: ['billing'] });
+        void qc.invalidateQueries({ queryKey: ['me'] });
+        void qc.invalidateQueries({ queryKey: ['sites-overview'] });
+      }
+    },
+  });
+}
+
+export const useBillingPortal = () =>
+  useMutation({
+    mutationFn: () => api.post<CheckoutResultDto>('/billing/portal'),
+    onSuccess: (res) => {
+      if (res.url) window.location.assign(res.url);
+    },
+  });
 
 // ---- Admin -----------------------------------------------------------------
 export const useAdminOrgs = (enabled: boolean) =>

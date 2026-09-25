@@ -9,14 +9,27 @@ export interface QuotaConfig {
   freePlanMaxArticles: number;
 }
 
-/** null = sin tope. Los límites viven en PLANS (@seo/shared); el de free, en el entorno. */
-export function articlesLimitForPlan(plan: string, config: QuotaConfig): number | null {
+/** Tope mensual de artículos de la organización. Los límites viven en PLANS (@seo/shared); el de free, en el entorno. */
+export function articlesLimitForPlan(plan: string, config: QuotaConfig): number {
   return articlesPerMonthFor(plan, config.freePlanMaxArticles);
+}
+
+/** Artículos generados este mes por TODA la organización (el tope del plan es por organización). */
+export async function organizationArticlesThisMonth(
+  prisma: Pick<PrismaClient, 'usageRecord'>,
+  organizationId: string,
+  period: string = currentPeriod(),
+): Promise<number> {
+  const agg = await prisma.usageRecord.aggregate({
+    where: { period, site: { organizationId } },
+    _sum: { articles: true },
+  });
+  return agg._sum.articles ?? 0;
 }
 
 /**
  * Lanza QUOTA_EXCEEDED si el plan de la organización no permite la acción.
- * Tope de artículos/mes del plan, incluyendo los ya en curso.
+ * Tope de artículos/mes del plan sumando todas sus tiendas, incluidos los ya en curso.
  */
 export async function assertQuota(
   prisma: PrismaClient,
@@ -27,21 +40,22 @@ export async function assertQuota(
 ): Promise<void> {
   const site = await prisma.site.findUnique({
     where: { id: siteId },
-    select: { organization: { select: { plan: true } } },
+    select: { organizationId: true, organization: { select: { plan: true } } },
   });
   if (!site) throw notFound('Site');
   if (action !== 'generate_article') return;
 
   const limit = articlesLimitForPlan(site.organization.plan, config);
-  if (limit === null) return;
-
-  const [usage, inFlight] = await Promise.all([
-    prisma.usageRecord.findUnique({
-      where: { siteId_period: { siteId, period: currentPeriod() } },
+  const [used, inFlight] = await Promise.all([
+    organizationArticlesThisMonth(prisma, site.organizationId),
+    prisma.keyword.count({
+      where: {
+        site: { organizationId: site.organizationId },
+        status: { in: ['queued', 'processing'] },
+      },
     }),
-    prisma.keyword.count({ where: { siteId, status: { in: ['queued', 'processing'] } } }),
   ]);
-  if ((usage?.articles ?? 0) + inFlight + extraInFlight >= limit) {
+  if (used + inFlight + extraInFlight >= limit) {
     throw new AppError('QUOTA_EXCEEDED', `Monthly article limit reached (${limit})`, {
       httpStatus: 402,
     });

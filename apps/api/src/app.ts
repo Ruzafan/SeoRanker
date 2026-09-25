@@ -13,6 +13,7 @@ import type { Env } from './env.js';
 import { registerAuth } from './plugins/auth.js';
 import { registerErrorHandler } from './plugins/error-handler.js';
 import { authRoutes } from './routes/auth.js';
+import { billingRoutes } from './routes/billing.js';
 import { healthRoutes, type HealthChecks } from './routes/health.js';
 import { adminRoutes, resourceRoutes } from './routes/resources.js';
 
@@ -89,6 +90,7 @@ export async function buildApp({
           loginRateLimitMax: env.LOGIN_RATE_LIMIT_MAX,
         }),
       );
+      await v1.register(billingRoutes(core, auth));
       await v1.register(resourceRoutes(core, auth));
       await v1.register(adminRoutes(core, auth));
     },

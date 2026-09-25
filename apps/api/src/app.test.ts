@@ -1,10 +1,11 @@
-import { randomBytes } from 'node:crypto';
+import { createHmac, randomBytes } from 'node:crypto';
 import { Writable } from 'node:stream';
 import { pino } from 'pino';
 import request from 'supertest';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
-import type { EnqueueInput, JobDispatcher, PipelineJobType } from '@seo/core';
+import type { Billing, EnqueueInput, JobDispatcher, PipelineJobType } from '@seo/core';
+import { createStripeBilling } from '@seo/core';
 import { resetDatabase, setupTestDatabase } from '@seo/db/testing';
 import type { PrismaClient } from '@seo/db';
 import { buildApp, LOG_REDACT_PATHS, type AppEnv } from './app.js';
@@ -136,7 +137,7 @@ describe.skipIf(!db)('API (integración con Postgres)', () => {
   let freeLimit = 10;
   let allowPrivate = true;
 
-  async function makeApp(overrides: Partial<AppEnv> = {}) {
+  async function makeApp(overrides: Partial<AppEnv> = {}, billing?: Billing) {
     dispatcher = new FakeDispatcher(prisma);
     app = await buildApp({
       env: { ...baseEnv, ...overrides },
@@ -146,6 +147,7 @@ describe.skipIf(!db)('API (integración con Postgres)', () => {
         dispatcher,
         encryptionKey: randomBytes(32),
         config: { allowPrivateHosts: allowPrivate, freePlanMaxArticles: freeLimit },
+        billing,
       },
     });
     await app.ready();
@@ -483,7 +485,8 @@ describe.skipIf(!db)('API (integración con Postgres)', () => {
       await agent.post(`/api/v1/sites/${site.id}/keywords`).send({ terms: ['aa aa', 'bb bb'] });
       const overview = await agent.get('/api/v1/sites/overview');
       expect(overview.body).toMatchObject({
-        plan: { id: 'agency', maxSites: null, articlesPerMonth: null },
+        plan: { id: 'agency', maxSites: 25, articlesPerMonth: 400 },
+        articlesThisMonth: 0,
         sitesCount: 2,
       });
       expect(overview.body.sites).toContainEqual(
@@ -642,6 +645,89 @@ describe.skipIf(!db)('API (integración con Postgres)', () => {
         'Sitio B',
       ]);
       expect((await a.get(`/api/v1/sites/${siteB.id}`)).status).toBe(404);
+    });
+  });
+
+  describe('facturación', () => {
+    const WHSEC = 'whsec_api_test';
+    function stripeSignature(payload: string): string {
+      const t = Math.floor(Date.now() / 1000);
+      const v1 = createHmac('sha256', WHSEC).update(`${t}.${payload}`).digest('hex');
+      return `t=${t},v1=${v1}`;
+    }
+
+    it('sin Stripe: /billing informa y las acciones devuelven BILLING_NOT_CONFIGURED', async () => {
+      const a = await signup('a@test.com');
+      const res = await a.get('/api/v1/billing');
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ configured: false, plan: 'free', canManage: true });
+      const checkout = await a.post('/api/v1/billing/checkout').send({ plan: 'pro' });
+      expect(checkout.status).toBe(503);
+      expect(checkout.body.error.code).toBe('BILLING_NOT_CONFIGURED');
+      expect((await request(app.server).get('/api/v1/billing')).status).toBe(401);
+    });
+
+    it('webhook: verifica la firma sobre el cuerpo sin parsear y activa el plan', async () => {
+      const real = createStripeBilling('sk_test_dummy', {
+        webhookSecret: WHSEC,
+        prices: { starter: 'price_s', pro: 'price_p', agency: 'price_a' },
+        webOrigin: 'http://localhost:8080',
+        automaticTax: false,
+      });
+      const billing: Billing = {
+        config: real.config,
+        api: {
+          ...real.api,
+          webhooks: real.api.webhooks,
+          subscriptions: {
+            retrieve: async (id: string) =>
+              ({
+                id,
+                status: 'active',
+                customer: 'cus_9',
+                cancel_at_period_end: false,
+                metadata: {},
+                items: {
+                  data: [{ id: 'si', price: { id: 'price_a' }, current_period_end: 2_000_000_000 }],
+                },
+              }) as never,
+            update: async () => {
+              throw new Error('not used');
+            },
+          },
+        },
+      };
+      await app.close();
+      await makeApp({}, billing);
+      const a = await signup('a@test.com');
+      const org = await prisma.organization.findFirstOrThrow();
+      await prisma.organization.update({
+        where: { id: org.id },
+        data: { stripeCustomerId: 'cus_9' },
+      });
+
+      // JSON con espacios: si Fastify lo re-serializara, la firma dejaría de cuadrar.
+      const payload = `{ "id": "evt_1", "object": "event", "type": "customer.subscription.updated",  "data": { "object": { "id": "sub_9", "object": "subscription" } } }`;
+      const bad = await request(app.server)
+        .post('/api/v1/billing/webhook')
+        .set('content-type', 'application/json; charset=utf-8')
+        .set('stripe-signature', 't=1,v1=00')
+        .send(payload);
+      expect(bad.status).toBe(400);
+
+      const ok = await request(app.server)
+        .post('/api/v1/billing/webhook')
+        .set('content-type', 'application/json; charset=utf-8')
+        .set('stripe-signature', stripeSignature(payload))
+        .send(payload);
+      expect(ok.status).toBe(200);
+      expect(ok.body).toEqual({ handled: true });
+      expect((await a.get('/api/v1/billing')).body).toMatchObject({
+        configured: true,
+        plan: 'agency',
+        status: 'active',
+        usage: { articlesLimit: 400, maxSites: 25 },
+      });
     });
   });
 

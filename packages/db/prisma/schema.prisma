@@ -11,10 +11,17 @@ datasource db {
 model Organization {
   id        String   @id @default(cuid())
   name      String
-  plan      String   @default("free") // free | pro | agency — preparado, no usado aún
+  plan      String   @default("free") // free | starter | pro | agency (lo sincroniza Stripe)
   createdAt DateTime @default(now())
   users     User[]
   sites     Site[]
+
+  // Facturación (Stripe). El plan efectivo es `plan`; esto es el estado de la suscripción.
+  stripeCustomerId     String?   @unique
+  stripeSubscriptionId String?   @unique
+  subscriptionStatus   String? // active | trialing | past_due | canceled | unpaid | incomplete...
+  currentPeriodEnd     DateTime?
+  cancelAtPeriodEnd    Boolean   @default(false)
 }
 
 model User {

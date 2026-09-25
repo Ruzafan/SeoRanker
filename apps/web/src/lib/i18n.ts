@@ -26,7 +26,10 @@ export const errorMessages: Record<ErrorCode | 'NETWORK_ERROR', string> = {
   PLAN_SITE_LIMIT:
     'Tu plan no admite más tiendas. Cambia de plan para conectar otra o elimina una que no uses.',
   PLATFORM_NOT_SUPPORTED: 'Esa plataforma todavía no está disponible. De momento, WordPress.',
-  QUOTA_EXCEEDED: 'Has alcanzado el límite mensual de artículos de tu plan.',
+  BILLING_NOT_CONFIGURED: 'Los pagos no están activados en este servidor.',
+  OWNER_REQUIRED: 'Solo el propietario de la cuenta puede hacer esto.',
+  QUOTA_EXCEEDED:
+    'Has alcanzado el límite mensual de artículos de tu plan. Puedes ampliarlo en Plan y facturación.',
   AI_ERROR: 'Falló la llamada a Claude. Suele ser temporal; reintenta en unos minutos.',
   AI_TRUNCATED:
     'La respuesta de Claude se cortó por longitud. Reduce las palabras por artículo y regenera.',

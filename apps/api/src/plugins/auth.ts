@@ -14,6 +14,8 @@ export interface AuthContext {
   userId: string;
   organizationId: string;
   email: string;
+  /** owner | member | viewer (ver ROLES en @seo/shared). */
+  role: string;
 }
 
 declare module 'fastify' {
@@ -60,10 +62,15 @@ export async function registerAuth(
     // Se relee el usuario en cada petición: borrar/mover un usuario invalida su sesión al instante.
     const user = await opts.prisma.user.findUnique({
       where: { id: req.user.sub },
-      select: { id: true, email: true, organizationId: true },
+      select: { id: true, email: true, organizationId: true, role: true },
     });
     if (!user) throw new AppError('UNAUTHORIZED', 'Authentication required', { httpStatus: 401 });
-    req.auth = { userId: user.id, organizationId: user.organizationId, email: user.email };
+    req.auth = {
+      userId: user.id,
+      organizationId: user.organizationId,
+      email: user.email,
+      role: user.role,
+    };
   };
 
   const requireAdmin = async (req: FastifyRequest): Promise<void> => {

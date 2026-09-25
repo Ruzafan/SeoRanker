@@ -1,19 +1,27 @@
 /**
  * Planes y plataformas: fuente única para backend (límites), panel y landing.
- * Precios orientativos para la landing; el cobro (Stripe) aún no existe.
+ * El cobro lo gestiona Stripe (ver packages/core/src/services/billing.ts); aquí solo los límites.
  */
-export const PLAN_IDS = ['free', 'pro', 'agency'] as const;
+export const PLAN_IDS = ['free', 'starter', 'pro', 'agency'] as const;
 export type PlanId = (typeof PLAN_IDS)[number];
+export const PAID_PLAN_IDS = ['starter', 'pro', 'agency'] as const;
+export type PaidPlanId = (typeof PAID_PLAN_IDS)[number];
 
 export interface PlanDef {
   id: PlanId;
   name: string;
-  /** EUR/mes. null = a medida. */
-  priceEur: number | null;
+  /** EUR/mes (IVA no incluido). */
+  priceEur: number;
   /** null = sin tope. */
   maxSites: number | null;
-  /** null = sin tope. En free lo fija FREE_PLAN_MAX_ARTICLES (ver articlesPerMonthFor). */
-  articlesPerMonth: number | null;
+  /** En free lo fija FREE_PLAN_MAX_ARTICLES (ver articlesPerMonthFor). */
+  articlesPerMonth: number;
+  /** Usuarios de la organización (incluido el propietario). null = sin tope. */
+  maxMembers: number | null;
+  /** Informes sin la marca SEO Autopilot, con el logo y color de la agencia. */
+  whiteLabel: boolean;
+  /** Seguimiento de visibilidad en asistentes de IA (ChatGPT, Perplexity…). */
+  aiVisibility: boolean;
   features: string[];
 }
 
@@ -23,8 +31,32 @@ export const PLANS: Record<PlanId, PlanDef> = {
     name: 'Free',
     priceEur: 0,
     maxSites: 1,
-    articlesPerMonth: 10,
-    features: ['1 tienda', 'Keywords automáticas', 'Borradores en tu CMS'],
+    articlesPerMonth: 3,
+    maxMembers: 1,
+    whiteLabel: false,
+    aiVisibility: false,
+    features: [
+      '1 tienda',
+      '3 artículos para probar',
+      'Keywords automáticas',
+      'Borradores en tu CMS',
+    ],
+  },
+  starter: {
+    id: 'starter',
+    name: 'Starter',
+    priceEur: 19,
+    maxSites: 1,
+    articlesPerMonth: 20,
+    maxMembers: 2,
+    whiteLabel: false,
+    aiVisibility: false,
+    features: [
+      '1 tienda',
+      '20 artículos al mes',
+      'Search Console: clics y posiciones',
+      'Publicación automática',
+    ],
   },
   pro: {
     id: 'pro',
@@ -32,25 +64,51 @@ export const PLANS: Record<PlanId, PlanDef> = {
     priceEur: 49,
     maxSites: 5,
     articlesPerMonth: 100,
-    features: ['Hasta 5 tiendas', 'Publicación automática', 'Voz de marca por tienda'],
+    maxMembers: 5,
+    whiteLabel: false,
+    aiVisibility: true,
+    features: [
+      'Hasta 5 tiendas',
+      '100 artículos al mes',
+      'Ventas atribuidas en WooCommerce',
+      'Refresco de contenido y clusters',
+      'Visibilidad en IA',
+    ],
   },
   agency: {
     id: 'agency',
     name: 'Agency',
-    priceEur: null,
-    maxSites: null,
-    articlesPerMonth: null,
-    features: ['Tiendas ilimitadas', 'Artículos sin tope', 'Soporte prioritario'],
+    priceEur: 149,
+    maxSites: 25,
+    articlesPerMonth: 400,
+    maxMembers: null,
+    whiteLabel: true,
+    aiVisibility: true,
+    features: [
+      'Hasta 25 tiendas',
+      '400 artículos al mes',
+      'Informes marca blanca',
+      'Aprobación de clientes',
+      'Usuarios ilimitados',
+    ],
   },
 };
 
-/** Un plan desconocido en BD se trata como free (lo más restrictivo). */
-export function planFor(plan: string): PlanDef {
-  return (PLAN_IDS as readonly string[]).includes(plan) ? PLANS[plan as PlanId] : PLANS.free;
+export function isPlanId(plan: string): plan is PlanId {
+  return (PLAN_IDS as readonly string[]).includes(plan);
 }
 
-/** Tope mensual de artículos; el de free es configurable por entorno. */
-export function articlesPerMonthFor(plan: string, freePlanMaxArticles: number): number | null {
+export function isPaidPlanId(plan: string): plan is PaidPlanId {
+  return (PAID_PLAN_IDS as readonly string[]).includes(plan);
+}
+
+/** Un plan desconocido en BD se trata como free (lo más restrictivo). */
+export function planFor(plan: string): PlanDef {
+  return isPlanId(plan) ? PLANS[plan] : PLANS.free;
+}
+
+/** Tope mensual de artículos (por organización); el de free es configurable por entorno. */
+export function articlesPerMonthFor(plan: string, freePlanMaxArticles: number): number {
   const def = planFor(plan);
   return def.id === 'free' ? freePlanMaxArticles : def.articlesPerMonth;
 }

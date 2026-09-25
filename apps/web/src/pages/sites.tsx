@@ -59,9 +59,11 @@ export function SitesPage() {
         description="Todas tus tiendas de un vistazo. Cada una tiene sus propias keywords, artículos, voz de marca y credenciales."
         actions={
           atLimit ? (
-            <Button icon={Plus} disabled title="Has llegado al límite de tiendas de tu plan">
-              Añadir tienda
-            </Button>
+            <Link to="/billing" title="Has llegado al límite de tiendas de tu plan">
+              <Button icon={Plus} variant="secondary">
+                Mejorar plan para añadir tiendas
+              </Button>
+            </Link>
           ) : (
             <Link to="/sites/new">
               <Button icon={Plus}>Añadir tienda</Button>
@@ -81,9 +83,15 @@ export function SitesPage() {
                 {plan.name}{' '}
                 <span className="text-sm font-normal text-stone-500">
                   · {overview.sitesCount}/{plan.maxSites ?? '∞'} tiendas ·{' '}
-                  {plan.articlesPerMonth ?? '∞'} artículos/mes por tienda
+                  {overview.articlesThisMonth}/{plan.articlesPerMonth} artículos este mes
                 </span>
               </p>
+              <Link
+                to="/billing"
+                className="text-xs text-teal-700 hover:underline dark:text-teal-400"
+              >
+                Cambiar de plan
+              </Link>
             </div>
             <Metric label="Publicados este mes" value={totals.published} />
             <Metric label="Keywords pendientes" value={totals.pending} />

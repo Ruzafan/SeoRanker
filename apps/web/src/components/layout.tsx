@@ -1,5 +1,6 @@
 import {
   BookOpenText,
+  CreditCard,
   FileText,
   Gauge,
   KeyRound,
@@ -67,6 +68,14 @@ function TopBar({ siteName }: { siteName?: string | undefined }) {
               <Shield className="h-5 w-5" />
             </Link>
           )}
+          <Link
+            to="/billing"
+            className="rounded-lg p-2 text-stone-600 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800"
+            aria-label="Plan y facturación"
+            title={me ? `Plan ${me.plan}` : 'Plan y facturación'}
+          >
+            <CreditCard className="h-5 w-5" />
+          </Link>
           <ThemeToggle />
           <button
             type="button"

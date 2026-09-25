@@ -79,7 +79,7 @@ Variables por servicio:
 
 | Servicio | Variables                                                                                                                                                                                                                |
 | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| api      | `NODE_ENV=production`, `DATABASE_URL`, `REDIS_URL`, `WEB_ORIGIN`, `JWT_SECRET`, `ENCRYPTION_KEY`, `ADMIN_EMAIL`, `REGISTRATION_ENABLED`, `FREE_PLAN_MAX_ARTICLES`                                                        |
+| api      | `NODE_ENV=production`, `DATABASE_URL`, `REDIS_URL`, `WEB_ORIGIN`, `JWT_SECRET`, `ENCRYPTION_KEY`, `ADMIN_EMAIL`, `REGISTRATION_ENABLED`, `FREE_PLAN_MAX_ARTICLES`, opcional `STRIPE_*` (ver Stripe)                      |
 | worker   | `NODE_ENV=production`, `DATABASE_URL`, `REDIS_URL`, `ENCRYPTION_KEY` (la **misma** que la api), `ANTHROPIC_API_KEY`, `DEFAULT_MODEL`, `FREE_PLAN_MAX_ARTICLES`, opcional `SERPAPI_KEY`, `WORKER_CONCURRENCY`             |
 | web      | `API_UPSTREAM` = URL interna de la api (p. ej. `http://api:3000`). nginx sirve el frontend y proxea `/api` y `/admin` a la api: el navegador ve un solo origen, así la cookie de sesión funciona sin CORS ni TLS cruzado |
 
@@ -154,6 +154,18 @@ Idempotentes, con `JobRun` al empezar y al acabar (duración, tokens, error), 3 
 
 Generar a mano (botón _Generar artículo_) se detiene en `ready` para que lo revises. La **cadencia automática** (Ajustes) genera cada día/semana la mejor keyword pendiente y la envía a WordPress (como borrador salvo que actives la publicación automática).
 
-## Planes y cuotas
+## Planes, cuotas y Stripe
 
-Todas las organizaciones son `free` ahora, con tope de `FREE_PLAN_MAX_ARTICLES` artículos/mes. `assertQuota` (`packages/core/src/pipeline/quota.ts`) es el punto de enganche para planes de pago; no hay facturación. Para subir un plan a mano: `UPDATE "Organization" SET plan = 'pro' WHERE id = '...'` (sin tope).
+Planes en `packages/shared/src/plans.ts` (fuente única para api, panel y landing): **Free** (1 tienda, `FREE_PLAN_MAX_ARTICLES` artículos/mes, por defecto 3), **Starter** 19 € (1 tienda, 20/mes), **Pro** 49 € (5 tiendas, 100/mes) y **Agency** 149 € (25 tiendas, 400/mes, marca blanca). El tope de artículos es **por organización** (suma de todas sus tiendas); lo aplica `assertQuota` (`packages/core/src/pipeline/quota.ts`).
+
+Sin Stripe configurado todo funciona y el plan se cambia a mano: `UPDATE "Organization" SET plan = 'pro' WHERE id = '...'`.
+
+### Stripe
+
+1. En Stripe crea un producto por plan (Starter, Pro, Agency) con un precio **mensual recurrente** en EUR y copia cada `price_...` a `STRIPE_PRICE_STARTER/PRO/AGENCY`.
+2. _Developers → API keys_: la secret key a `STRIPE_SECRET_KEY`.
+3. _Developers → Webhooks_: endpoint `https://<tu-dominio>/api/v1/billing/webhook` con los eventos `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `customer.subscription.paused` y `customer.subscription.resumed`. Su signing secret a `STRIPE_WEBHOOK_SECRET`.
+4. _Settings → Billing → Customer portal_: actívalo (facturas, método de pago y cancelación).
+5. Opcional: activa Stripe Tax y pon `STRIPE_AUTOMATIC_TAX=true` para cobrar el IVA por país.
+
+El webhook relee la suscripción de Stripe en cada evento, así que el orden de llegada da igual y reenviar eventos es seguro. Con una suscripción activa, cambiar de plan en el panel cambia el precio en Stripe al instante (con prorrateo) sin volver a pasar por Checkout.

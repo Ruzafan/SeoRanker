@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { PLATFORM_IDS } from './plans.js';
+import { PAID_PLAN_IDS, PLATFORM_IDS } from './plans.js';
 import { editableSettingsSchema } from './settings.js';
 
 // ---- Auth ----------------------------------------------------------------
@@ -138,3 +138,7 @@ export const pageQuerySchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(100).default(25),
 });
 export type PageQuery = z.infer<typeof pageQuerySchema>;
+
+// ---- Facturación -----------------------------------------------------------
+export const checkoutSchema = z.object({ plan: z.enum(PAID_PLAN_IDS) });
+export type CheckoutInput = z.infer<typeof checkoutSchema>;

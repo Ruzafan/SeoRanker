@@ -495,7 +495,7 @@ describe.skipIf(!db)('pipeline (integración con Postgres)', () => {
         code: 'QUOTA_EXCEEDED',
       });
     });
-    it('pro tiene su propio tope; agency no tiene', async () => {
+    it('cada plan de pago tiene su propio tope (pro 100, agency 400)', async () => {
       const cfg = { freePlanMaxArticles: 2 };
       await prisma.organization.update({ where: { id: orgId }, data: { plan: 'pro' } });
       await prisma.usageRecord.create({
@@ -507,8 +507,12 @@ describe.skipIf(!db)('pipeline (integración con Postgres)', () => {
         code: 'QUOTA_EXCEEDED',
       });
       await prisma.organization.update({ where: { id: orgId }, data: { plan: 'agency' } });
-      await prisma.usageRecord.updateMany({ where: { siteId }, data: { articles: 999 } });
+      await prisma.usageRecord.updateMany({ where: { siteId }, data: { articles: 399 } });
       await expect(assertQuota(prisma, siteId, 'generate_article', cfg)).resolves.toBeUndefined();
+      await prisma.usageRecord.updateMany({ where: { siteId }, data: { articles: 400 } });
+      await expect(assertQuota(prisma, siteId, 'generate_article', cfg)).rejects.toMatchObject({
+        code: 'QUOTA_EXCEEDED',
+      });
     });
   });
 

@@ -161,27 +161,36 @@ export function DashboardPage() {
         />
       </div>
 
-      {usage.articlesLimit !== null && (
-        <Card className="mt-3">
-          <div className="flex items-center justify-between text-sm">
-            <span>
-              Plan <strong className="capitalize">{usage.plan}</strong>: {usage.articles} de{' '}
-              {usage.articlesLimit} artículos este mes
-            </span>
-          </div>
-          <div className="mt-2 h-2 overflow-hidden rounded-full bg-stone-200 dark:bg-stone-800">
-            <div
-              className={cx(
-                'h-full rounded-full',
-                usage.articles >= usage.articlesLimit ? 'bg-red-600' : 'bg-teal-600',
-              )}
-              style={{
-                width: `${Math.min(100, (usage.articles / Math.max(1, usage.articlesLimit)) * 100)}%`,
-              }}
-            />
-          </div>
-        </Card>
-      )}
+      <Card className="mt-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+          <span>
+            Plan <strong className="capitalize">{usage.plan}</strong>: {usage.organizationArticles}{' '}
+            de {usage.articlesLimit} artículos este mes
+            {usage.organizationArticles !== usage.articles && (
+              <span className="text-stone-500"> ({usage.articles} en esta tienda)</span>
+            )}
+          </span>
+          {usage.organizationArticles >= usage.articlesLimit * 0.8 && (
+            <Link
+              to="/billing"
+              className="font-medium text-teal-700 hover:underline dark:text-teal-400"
+            >
+              Mejorar plan
+            </Link>
+          )}
+        </div>
+        <div className="mt-2 h-2 overflow-hidden rounded-full bg-stone-200 dark:bg-stone-800">
+          <div
+            className={cx(
+              'h-full rounded-full',
+              usage.organizationArticles >= usage.articlesLimit ? 'bg-red-600' : 'bg-teal-600',
+            )}
+            style={{
+              width: `${Math.min(100, (usage.organizationArticles / Math.max(1, usage.articlesLimit)) * 100)}%`,
+            }}
+          />
+        </div>
+      </Card>
 
       <section className="mt-8">
         <div className="mb-3 flex items-center justify-between">

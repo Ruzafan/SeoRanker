@@ -446,7 +446,7 @@ function Pricing({ loggedIn }: { loggedIn: boolean }) {
     >
       <div className="mx-auto max-w-6xl px-4">
         <SectionTitle eyebrow="Precios" title="Empieza gratis, crece cuando lo necesites" />
-        <div className="grid gap-6 md:grid-cols-3">
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
           {PLAN_IDS.map((id) => {
             const p = PLANS[id];
             const featured = id === 'pro';
@@ -465,19 +465,13 @@ function Pricing({ loggedIn }: { loggedIn: boolean }) {
                   {featured && <Badge tone="blue">Más popular</Badge>}
                 </div>
                 <p className="mt-4">
-                  {p.priceEur === null ? (
-                    <span className="text-3xl font-semibold">A medida</span>
-                  ) : (
-                    <>
-                      <span className="text-4xl font-semibold tabular-nums">{p.priceEur} €</span>
-                      <span className="text-stone-500"> /mes</span>
-                    </>
-                  )}
+                  <span className="text-4xl font-semibold tabular-nums">{p.priceEur} €</span>
+                  <span className="text-stone-500"> /mes</span>
                 </p>
                 <p className="mt-1 text-sm text-stone-500">
-                  {p.articlesPerMonth === null
-                    ? 'Artículos ilimitados'
-                    : `Hasta ${p.articlesPerMonth} artículos/mes por tienda`}
+                  {id === 'free'
+                    ? 'Sin tarjeta'
+                    : `${(p.priceEur / p.articlesPerMonth).toFixed(2).replace('.', ',')} € por artículo`}
                 </p>
                 <ul className="mt-5 flex-1 space-y-2 text-sm">
                   {p.features.map((f) => (
@@ -489,7 +483,7 @@ function Pricing({ loggedIn }: { loggedIn: boolean }) {
                 </ul>
                 <Link to={loggedIn ? '/app' : '/login'} className="mt-6">
                   <Button variant={featured ? 'primary' : 'secondary'} className="w-full">
-                    {p.priceEur === null ? 'Hablemos' : 'Empezar'}
+                    {id === 'free' ? 'Empezar gratis' : `Elegir ${p.name}`}
                   </Button>
                 </Link>
               </div>
@@ -497,7 +491,7 @@ function Pricing({ loggedIn }: { loggedIn: boolean }) {
           })}
         </div>
         <p className="mt-4 text-center text-xs text-stone-500">
-          Precios orientativos, IVA no incluido. El coste de la IA está incluido en el plan.
+          IVA no incluido. El coste de la IA está incluido. Cancela cuando quieras.
         </p>
       </div>
     </section>
