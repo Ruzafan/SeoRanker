@@ -126,6 +126,15 @@ export function useDeleteSite(siteId: string) {
   });
 }
 
+export const useAuthors = (siteId: string, enabled: boolean) =>
+  useQuery({
+    queryKey: ['site', siteId, 'authors'],
+    queryFn: () => api.get<{ id: number; name: string }[]>(`/sites/${siteId}/authors`),
+    enabled,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+
 export const useTestConnection = (siteId: string) => {
   const qc = useQueryClient();
   return useMutation({

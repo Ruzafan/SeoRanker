@@ -17,7 +17,8 @@ import {
   type KeywordProvider,
 } from '../keywords/provider.js';
 import { siteScope } from '../tenant.js';
-import { loadSite, modelFor, siteContext } from './common.js';
+import { blendScore, type KeywordMetrics } from '../keywords/metrics.js';
+import { loadSite, metricsProviderFor, modelFor, siteContext } from './common.js';
 import type { PipelineContext, RunInfo } from './context.js';
 import { runTracked } from './run-tracked.js';
 import { startFirstArticle } from './onboarding.js';
@@ -82,8 +83,10 @@ export function runDiscover(ctx: PipelineContext, info: RunInfo): Promise<void> 
     }
     const fresh = terms.filter((t) => !existing.has(t) && !seedSet.has(t)).slice(0, MAX_CANDIDATES);
 
-    // 3. Puntuar con Claude por lotes.
+    // 3. Puntuar con Claude por lotes; si hay proveedor de métricas, se mezcla con la demanda real.
     const model = modelFor(ctx, site);
+    const metricsProvider = metricsProviderFor(ctx);
+    let withMetrics = 0;
     let inserted = 0;
     let discarded = 0;
     for (let i = 0; i < fresh.length; i += SCORE_BATCH) {
@@ -104,17 +107,34 @@ export function runDiscover(ctx: PipelineContext, info: RunInfo): Promise<void> 
         .filter((k) => wanted.has(k.term));
       const kept = rows.filter((k) => k.keep);
       discarded += batch.length - kept.length;
+      let metrics = new Map<string, KeywordMetrics>();
+      if (metricsProvider && kept.length) {
+        try {
+          metrics = await metricsProvider.getMetrics(
+            kept.map((k) => k.term),
+            { language: site.language, country: site.country },
+          );
+          withMetrics += metrics.size;
+        } catch (err) {
+          // Sin métricas se sigue con la puntuación de Claude: no merece tirar el descubrimiento.
+          ctx.log.warn({ siteId: site.id, err: String(err) }, 'keyword metrics unavailable');
+        }
+      }
       const created = await scope.keywords.createMany(
         kept.map((k) => {
           const c = candidates.get(k.term);
           const { score, intent } = normalizeScore(k.score, k.intent);
+          const m = metrics.get(k.term);
           return {
             term: k.term,
             source: c?.source ?? 'autocomplete',
             seedTerm: c?.seedTerm ?? null,
-            score,
+            score: blendScore(score, m),
             intent,
             status: 'pending',
+            volume: m?.volume ?? null,
+            difficulty: m?.difficulty ?? null,
+            cpc: m?.cpc ?? null,
           };
         }),
       );
@@ -146,6 +166,7 @@ export function runDiscover(ctx: PipelineContext, info: RunInfo): Promise<void> 
         scored: fresh.length,
         inserted,
         discarded,
+        withMetrics,
         ...(firstArticle ? { firstArticle } : {}),
         prompt: SCORE_KEYWORDS_PROMPT_VERSION,
       },

@@ -22,7 +22,14 @@ import {
   inputClass,
 } from '../components/ui';
 import { ConnectorCard } from '../components/connector';
-import { useDeleteSite, useSite, useTestConnection, useUpdateSite, withToast } from '../lib/hooks';
+import {
+  useAuthors,
+  useDeleteSite,
+  useSite,
+  useTestConnection,
+  useUpdateSite,
+  withToast,
+} from '../lib/hooks';
 import { cadenceLabel, errorMessages, warningMessages } from '../lib/i18n';
 
 const formSchema = z.object({
@@ -38,6 +45,9 @@ const formSchema = z.object({
   autoPublish: siteSettingsSchema.shape.autoPublish,
   categoryId: z.string().regex(/^\d*$/, 'Debe ser un número'),
   model: z.string().trim().max(100),
+  expertise: z.string().max(3000, 'Máximo 3000 caracteres'),
+  authorId: z.string(),
+  productCards: z.boolean(),
   active: z.boolean(),
 });
 type FormValues = z.infer<typeof formSchema>;
@@ -55,6 +65,9 @@ const toForm = (s: SiteDto): FormValues => ({
   autoPublish: s.settings.autoPublish,
   categoryId: s.settings.categoryId ? String(s.settings.categoryId) : '',
   model: s.settings.model ?? '',
+  expertise: s.settings.expertise ?? '',
+  authorId: s.settings.authorId ? String(s.settings.authorId) : '',
+  productCards: s.settings.productCards,
   active: s.active,
 });
 
@@ -66,6 +79,7 @@ export function SettingsPage() {
   const test = useTestConnection(siteId);
   const del = useDeleteSite(siteId);
   const [result, setResult] = useState<ConnectionTestDto | null>(null);
+  const authors = useAuthors(siteId, !!site?.hasCredentials);
 
   const { register, handleSubmit, reset, formState } = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -100,6 +114,9 @@ export function SettingsPage() {
         autoPublish: v.autoPublish,
         categoryId: v.categoryId ? Number(v.categoryId) : null,
         model: v.model || null,
+        expertise: v.expertise.trim() || null,
+        authorId: v.authorId ? Number(v.authorId) : null,
+        productCards: v.productCards,
       },
     };
     // Las credenciales solo se envían si el usuario escribe algo; en blanco = mantener las guardadas.
@@ -224,6 +241,67 @@ export function SettingsPage() {
         </Card>
 
         <ConnectorCard settings={site.settings} />
+
+        <Card className="space-y-4">
+          <div>
+            <h2 className="font-medium">Autoría y experiencia</h2>
+            <p className="text-sm text-stone-600 dark:text-stone-400">
+              Google premia el contenido escrito desde la experiencia real (E-E-A-T). Lo que
+              escribas aquí se usa en los artículos como experiencia de primera mano; la IA no
+              inventará otras.
+            </p>
+          </div>
+          <Field
+            label="Vuestra experiencia"
+            hint="Años en el sector, especialidad, qué veis a diario con vuestros clientes, garantías, cómo probáis los productos…"
+            error={errors.expertise?.message}
+          >
+            <textarea
+              className={cx(inputClass, 'min-h-28')}
+              placeholder="Llevamos 12 años vendiendo figuras de colección. Revisamos cada pieza antes del envío y el 90 % de las consultas que recibimos son sobre cómo limpiarlas y exponerlas sin que amarilleen."
+              {...register('expertise')}
+            />
+          </Field>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field
+              label="Autor de los artículos"
+              hint={
+                authors.error
+                  ? 'No se pudo leer la lista de usuarios de WordPress.'
+                  : 'Usuario de WordPress que firma los posts.'
+              }
+            >
+              <select className={inputClass} {...register('authorId')}>
+                <option value="">El usuario de la conexión</option>
+                {authors.data?.map((a) => (
+                  <option key={a.id} value={String(a.id)}>
+                    {a.name}
+                  </option>
+                ))}
+                {site.settings.authorId &&
+                  !authors.data?.some((a) => a.id === site.settings.authorId) && (
+                    <option value={String(site.settings.authorId)}>
+                      Usuario #{site.settings.authorId}
+                    </option>
+                  )}
+              </select>
+            </Field>
+          </div>
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="mt-0.5 rounded border-stone-300 text-teal-700 focus:ring-teal-600"
+              {...register('productCards')}
+            />
+            <span>
+              Recomendar productos de la tienda en los artículos
+              <span className="block text-xs text-stone-500">
+                Con WooCommerce: tarjetas con precio y botón de compra (solo cuando encajan con el
+                tema) y la foto del producto como imagen destacada.
+              </span>
+            </span>
+          </label>
+        </Card>
 
         <Card className="space-y-4">
           <h2 className="font-medium">Contenido y automatización</h2>

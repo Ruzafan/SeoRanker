@@ -100,7 +100,11 @@ model Article {
   slug            String
   metaDescription String?
   outline         Json?
+  /// Top de Google para la keyword al planificar (títulos, H2 de la competencia, preguntas).
+  serp            Json?
   contentHtml     String?   @db.Text
+  /// Imagen destacada (ID de medio de WordPress, p. ej. la foto del producto recomendado).
+  featuredMediaId Int?
   status          String    @default("draft") // draft | writing | ready | publishing | published | failed
   remotePostId    Int? // ID del post en WordPress
   remoteUrl       String?

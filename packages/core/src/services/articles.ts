@@ -1,9 +1,16 @@
 import type { Article, Prisma } from '@seo/db';
-import type { ArticleQuery, EnqueuedDto, Paginated, PatchArticleInput } from '@seo/shared';
+import type {
+  ArticleDto,
+  ArticleQuery,
+  EnqueuedDto,
+  Paginated,
+  PatchArticleInput,
+} from '@seo/shared';
 import { AppError } from '../errors.js';
 import { countWords, sanitizeArticleHtml } from '../html.js';
 import { requireArticle, requireSite, siteScope } from '../tenant.js';
 import type { CoreDeps } from './deps.js';
+import { toArticleDto } from './mappers.js';
 
 export async function listArticles(
   deps: CoreDeps,
@@ -28,6 +35,19 @@ export async function listArticles(
 
 export function getArticle(deps: CoreDeps, organizationId: string, id: string): Promise<Article> {
   return requireArticle(deps.prisma, organizationId, id);
+}
+
+/** Artículo listo para el editor: con su keyword objetivo. */
+export async function getArticleDto(
+  deps: CoreDeps,
+  organizationId: string,
+  id: string,
+): Promise<ArticleDto> {
+  const article = await requireArticle(deps.prisma, organizationId, id);
+  const keyword = article.keywordId
+    ? await siteScope(deps.prisma, article.siteId).keywords.findById(article.keywordId)
+    : null;
+  return toArticleDto(article, keyword?.term ?? null);
 }
 
 export async function patchArticle(

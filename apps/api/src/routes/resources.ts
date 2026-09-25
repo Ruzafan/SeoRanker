@@ -10,10 +10,11 @@ import {
   deleteSite,
   discoverKeywords,
   generateFromKeyword,
-  getArticle,
+  getArticleDto,
   getPerformance,
   getSearchConsoleStatus,
   listSearchConsoleProperties,
+  listSiteAuthors,
   selectSearchConsoleProperty,
   disconnectSearchConsole,
   startGoogleConnect,
@@ -32,7 +33,6 @@ import {
   regenerateArticle,
   requireSite,
   testSiteConnection,
-  toArticleDto,
   toArticleSummary,
   toJobRunDto,
   toKeywordDto,
@@ -102,6 +102,11 @@ export function resourceRoutes(deps: CoreDeps, auth: AuthHelpers) {
       return testSiteConnection(deps, org(req), id);
     });
 
+    app.get('/sites/:id/authors', async (req) => {
+      const { id } = idParam.parse(req.params);
+      return listSiteAuthors(deps, org(req), id);
+    });
+
     app.post('/sites/:id/analyze-voice', async (req, reply) => {
       const { id } = idParam.parse(req.params);
       return reply.status(202).send(await analyzeVoice(deps, org(req), id));
@@ -157,14 +162,13 @@ export function resourceRoutes(deps: CoreDeps, auth: AuthHelpers) {
 
     app.get('/articles/:id', async (req) => {
       const { id } = idParam.parse(req.params);
-      return toArticleDto(await getArticle(deps, org(req), id));
+      return getArticleDto(deps, org(req), id);
     });
 
     app.patch('/articles/:id', async (req) => {
       const { id } = idParam.parse(req.params);
-      return toArticleDto(
-        await patchArticle(deps, org(req), id, patchArticleSchema.parse(req.body)),
-      );
+      await patchArticle(deps, org(req), id, patchArticleSchema.parse(req.body));
+      return getArticleDto(deps, org(req), id);
     });
 
     app.delete('/articles/:id', async (req, reply) => {

@@ -1,6 +1,6 @@
 import { parseSettings } from '@seo/shared';
 import { AppError, errorCode, notFound } from '../errors.js';
-import { countWords, sanitizeArticleHtml } from '../html.js';
+import { applyProductCards, countWords, sanitizeArticleHtml } from '../html.js';
 import type { OutlineResult } from '../ai/prompts/outline.js';
 import {
   writeSchema,
@@ -9,7 +9,9 @@ import {
   writeUser,
   WRITE_PROMPT_VERSION,
   type InternalLink,
+  type ProductOption,
 } from '../ai/prompts/write.js';
+import type { StoreProduct } from '../adapters/index.js';
 import { siteScope } from '../tenant.js';
 import { adapterFor, loadSite, modelFor, siteContext } from './common.js';
 import type { PipelineContext, RunInfo } from './context.js';
@@ -64,6 +66,16 @@ export function runWrite(ctx: PipelineContext, info: RunInfo): Promise<void> {
         ctx.log.warn({ siteId: site.id, code: linksWarning }, 'internal links unavailable');
       }
 
+      // Productos de la tienda que el artículo puede recomendar (tarjeta con precio y compra).
+      let products: StoreProduct[] = [];
+      if (settings.productCards && settings.woocommerce !== false) {
+        try {
+          products = await adapterFor(ctx, site).searchProducts(keyword?.term ?? article.title, 8);
+        } catch (err) {
+          ctx.log.warn({ siteId: site.id, code: errorCode(err) }, 'store products unavailable');
+        }
+      }
+
       const outline = article.outline as unknown as OutlineResult;
       const result = await ctx.claude.callTool({
         model: modelFor(ctx, site),
@@ -73,6 +85,12 @@ export function runWrite(ctx: PipelineContext, info: RunInfo): Promise<void> {
           outline,
           wordCount: settings.wordCount,
           links,
+          products: products.map((p): ProductOption => ({
+            id: p.id,
+            name: p.name,
+            url: p.url,
+            price: p.price,
+          })),
         }),
         maxTokens: maxTokensFor(settings.wordCount),
         toolDescription: writeToolDescription,
@@ -81,13 +99,21 @@ export function runWrite(ctx: PipelineContext, info: RunInfo): Promise<void> {
       await tracker.add(result.model, result.usage);
 
       const allowed = new Set(links.map((l) => l.url));
-      const html = sanitizeArticleHtml(result.data.contentHtml, allowed);
+      const cards = applyProductCards(
+        sanitizeArticleHtml(result.data.contentHtml, allowed),
+        new Set(products.map((p) => p.id)),
+      );
+      const html = cards.html;
       const wordCount = countWords(html);
+      const featured = cards.productIds
+        .map((id) => products.find((p) => p.id === id)?.imageId)
+        .find((id): id is number => typeof id === 'number');
 
       await scope.articles.updateById(article.id, {
         contentHtml: html,
         wordCount,
         status: 'ready',
+        ...(featured ? { featuredMediaId: featured } : {}),
       });
       if (article.keywordId) await scope.keywords.updateById(article.keywordId, { status: 'done' });
       await recordUsage(ctx.prisma, site.id, { articles: 1 });
@@ -101,6 +127,7 @@ export function runWrite(ctx: PipelineContext, info: RunInfo): Promise<void> {
           wordCount,
           links: links.length,
           linksWarning,
+          products: cards.productIds,
           prompt: WRITE_PROMPT_VERSION,
         },
       };

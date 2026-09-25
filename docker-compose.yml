@@ -94,6 +94,8 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       DEFAULT_MODEL: ${DEFAULT_MODEL:-claude-sonnet-5}
       SERPAPI_KEY: ${SERPAPI_KEY:-}
+      DATAFORSEO_LOGIN: ${DATAFORSEO_LOGIN:-}
+      DATAFORSEO_PASSWORD: ${DATAFORSEO_PASSWORD:-}
       WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-2}
     depends_on:
       migrate: { condition: service_completed_successfully }

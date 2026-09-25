@@ -25,6 +25,7 @@ import {
   withToast,
 } from '../lib/hooks';
 import { articleStatusLabel, errorText, parseJobError, warningMessages } from '../lib/i18n';
+import { OnPagePanel, SerpPanel } from '../components/onpage-panel';
 
 const TITLE_MAX = 60;
 const META_MAX = 155;
@@ -45,7 +46,15 @@ function Counter({ value, max }: { value: number; max: number }) {
 }
 
 const PREVIEW_STYLES =
-  '<style>body{font:16px/1.65 system-ui,sans-serif;max-width:42rem;margin:1rem auto;padding:0 1rem;color:#1c1917}h2{margin-top:1.8em}a{color:#0f766e}</style>';
+  '<style>body{font:16px/1.65 system-ui,sans-serif;max-width:42rem;margin:1rem auto;padding:0 1rem;color:#1c1917}h2{margin-top:1.8em}a{color:#0f766e}table{border-collapse:collapse;width:100%}th,td{border:1px solid #d6d3d1;padding:.4em .6em;text-align:left}.product{border:1px dashed #0d9488;border-radius:.5rem;padding:.8em 1em;color:#115e59;background:#f0fdfa;margin:1em 0}</style>';
+
+/** En la vista previa, el shortcode de WooCommerce se muestra como un hueco de tarjeta. */
+function previewHtml(html: string): string {
+  return html.replace(
+    /\[products ids="(\d+)"[^\]]*\]/g,
+    '<div class="product">🛒 Tarjeta del producto #$1 (precio y botón de compra en tu tienda)</div>',
+  );
+}
 
 export function ArticleEditorPage() {
   const { siteId = '', articleId = '' } = useParams();
@@ -225,12 +234,24 @@ export function ArticleEditorPage() {
             <iframe
               title="Vista previa del artículo"
               sandbox=""
-              srcDoc={`${PREVIEW_STYLES}<h1>${escapeHtml(title)}</h1>${html}`}
+              srcDoc={`${PREVIEW_STYLES}<h1>${escapeHtml(title)}</h1>${previewHtml(html)}`}
               className="h-[28rem] w-full rounded-lg border border-stone-200 bg-white dark:border-stone-700"
             />
           )}
         </div>
       </Card>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <OnPagePanel
+          keyword={article.keyword}
+          title={title}
+          meta={meta}
+          slug={article.slug}
+          html={html}
+          targetWords={site?.settings.wordCount ?? 1200}
+        />
+        {article.serp && <SerpPanel serp={article.serp} />}
+      </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <Button

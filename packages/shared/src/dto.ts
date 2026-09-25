@@ -79,6 +79,15 @@ export interface ArticleDto extends ArticleSummaryDto {
     faq: { question: string; answer: string }[];
   } | null;
   remotePostId: number | null;
+  /** Keyword objetivo (para el análisis on-page). */
+  keyword: string | null;
+  featuredMediaId: number | null;
+  /** Lo que posicionaba en Google al planificarlo (null si no había SerpAPI). */
+  serp: {
+    fetchedAt: string;
+    results: { position: number; title: string; url: string; wordCount: number | null }[];
+    relatedQuestions: string[];
+  } | null;
 }
 
 export interface JobRunDto {

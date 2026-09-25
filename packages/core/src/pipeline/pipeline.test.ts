@@ -79,6 +79,19 @@ function fakeAdapter(): PublishingAdapter & { created: unknown[] } {
       return { id: 500, url: 'https://tienda.es/post-500', warnings: [] };
     },
     updatePost: async () => ({ warnings: [] }),
+    searchProducts: async () => [
+      {
+        id: 12,
+        name: 'Vitrina LED',
+        url: 'https://tienda.es/vitrina',
+        price: '59,90 EUR',
+        imageId: 301,
+      },
+      { id: 13, name: 'Peana', url: 'https://tienda.es/peana', price: null, imageId: null },
+    ],
+    listAuthors: async () => [{ id: 7, name: 'Ana' }],
+    getPostsInfo: async () => [],
+    listAttributedOrders: async () => null,
   };
 }
 
@@ -174,6 +187,77 @@ describe.skipIf(!db)('pipeline (integración con Postgres)', () => {
     const usage = await prisma.usageRecord.findFirstOrThrow({ where: { siteId } });
     expect(usage).toMatchObject({ articles: 1, inputTokens: 2000, outputTokens: 1000 });
     expect(usage.costCents).toBeGreaterThan(0);
+  });
+
+  it('calidad: SERP en el esquema, tarjeta de producto, imagen destacada, autor y JSON-LD FAQ', async () => {
+    await prisma.site.update({
+      where: { id: siteId },
+      data: { settings: { ...DEFAULT_SETTINGS, wordCount: 300, authorId: 7, seoPlugin: 'yoast' } },
+    });
+    const kw = await newKeyword();
+    const html =
+      '<h2>Intro</h2><p>' +
+      'palabra '.repeat(300) +
+      '</p><p>La vitrina LED protege del polvo.</p><p>[[product:12]]</p><p>[[product:999]]</p>' +
+      '<h2>Preguntas frecuentes</h2><h3>¿Cuánto polvo?</h3><p>Poco si está cerrada.</p><h3>¿Luz?</h3><p>LED de bajo consumo.</p>';
+    const claude = fakeClaude({
+      'Submit the finished article body as HTML.': () => ({ contentHtml: html }),
+    });
+    const fetchFn = vi.fn(async (u: string | URL | Request) =>
+      String(u).startsWith('https://serpapi.com')
+        ? new Response(
+            JSON.stringify({
+              organic_results: [
+                { position: 1, title: 'Guía rival', link: 'https://rival.es/g', snippet: 's' },
+              ],
+              related_questions: [{ question: '¿Qué vitrina comprar?' }],
+            }),
+          )
+        : new Response('<h2>Qué es una figura</h2><p>texto</p>', {
+            headers: { 'content-type': 'text/html' },
+          }),
+    );
+    const ctx = {
+      ...ctxWith(claude),
+      fetchFn: fetchFn as unknown as typeof fetch,
+      config: { ...ctxWith().config, serpApiKey: 'serp-key' },
+    };
+    await dispatcher.enqueue('outline', { siteId, refId: kw.id, chain: 'publish' });
+    await drain(ctx);
+
+    const outlineCall = (claude.callTool as ReturnType<typeof vi.fn>).mock.calls.find(
+      (c) =>
+        (c[0] as { toolDescription: string }).toolDescription === 'Submit the article outline.',
+    )?.[0] as { user: string };
+    expect(outlineCall.user).toContain('Guía rival');
+    expect(outlineCall.user).toContain('- Qué es una figura');
+    expect(outlineCall.user).toContain('¿Qué vitrina comprar?');
+    const writeCall = (claude.callTool as ReturnType<typeof vi.fn>).mock.calls.find(
+      (c) =>
+        (c[0] as { toolDescription: string }).toolDescription ===
+        'Submit the finished article body as HTML.',
+    )?.[0] as { user: string };
+    expect(writeCall.user).toContain('ID 12: Vitrina LED (59,90 EUR)');
+
+    const article = await prisma.article.findFirstOrThrow({ where: { siteId } });
+    expect(article.serp).toMatchObject({
+      query: 'figuras de acción',
+      results: [{ title: 'Guía rival' }],
+    });
+    expect(article.contentHtml).toContain('[products ids="12" columns="1"]');
+    expect(article.contentHtml).not.toContain('999');
+    expect(article.featuredMediaId).toBe(301);
+
+    const sent = adapter.created[0] as {
+      authorId: number;
+      featuredMediaId: number;
+      seo: { schemaJson: string };
+    };
+    expect(sent).toMatchObject({ authorId: 7, featuredMediaId: 301 });
+    const schema = JSON.parse(sent.seo.schemaJson);
+    // Con Yoast activo no se duplica Article: solo el FAQ visible.
+    expect(schema['@graph'].map((n: { '@type': string }) => n['@type'])).toEqual(['FAQPage']);
+    expect(schema['@graph'][0].mainEntity[0].name).toBe('¿Cuánto polvo?');
   });
 
   it('con chain=ready se detiene en ready (no publica)', async () => {

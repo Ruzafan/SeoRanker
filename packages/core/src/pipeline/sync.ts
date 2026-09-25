@@ -5,7 +5,8 @@ import { errorCode, errorMessage } from '../errors.js';
 import { GoogleClient, urlKey, type SearchAnalyticsRow } from '../integrations/google.js';
 import { normalizeTerm } from '../keywords/provider.js';
 import { siteScope } from '../tenant.js';
-import { adapterFor, loadSite } from './common.js';
+import { blendScore } from '../keywords/metrics.js';
+import { adapterFor, loadSite, metricsProviderFor } from './common.js';
 import type { PipelineContext, RunInfo } from './context.js';
 import { runTracked } from './run-tracked.js';
 
@@ -53,6 +54,7 @@ export function runSync(ctx: PipelineContext, info: RunInfo): Promise<void> {
     await part('posts', () => syncPosts(ctx, site));
     await part('searchConsole', () => syncSearchConsole(ctx, site, now));
     await part('orders', () => syncOrders(ctx, site, now));
+    await part('keywordMetrics', () => syncKeywordMetrics(ctx, site));
     return { meta };
   });
 }
@@ -352,6 +354,42 @@ async function detectDecay(
     }
   }
   return { flagged, recovered };
+}
+
+const METRICS_PER_SYNC = 300;
+
+/**
+ * Volumen y dificultad de las keywords pendientes que aún no los tienen (manuales, de Search
+ * Console…). La puntuación se recalcula mezclando la de antes con la demanda.
+ */
+async function syncKeywordMetrics(ctx: PipelineContext, site: Site): Promise<unknown> {
+  const provider = metricsProviderFor(ctx);
+  if (!provider) return { skipped: 'NOT_CONFIGURED' };
+  const scope = siteScope(ctx.prisma, site.id);
+  const missing = await scope.keywords.findMany({
+    where: { status: 'pending', volume: null },
+    orderBy: { score: 'desc' },
+    take: METRICS_PER_SYNC,
+    select: { id: true, term: true, score: true },
+  });
+  if (!missing.length) return { updated: 0 };
+  const metrics = await provider.getMetrics(
+    missing.map((k) => k.term),
+    { language: site.language, country: site.country },
+  );
+  let updated = 0;
+  for (const k of missing) {
+    const m = metrics.get(k.term);
+    if (!m) continue;
+    await scope.keywords.updateById(k.id, {
+      volume: m.volume,
+      difficulty: m.difficulty,
+      cpc: m.cpc,
+      score: blendScore(k.score, m),
+    });
+    updated++;
+  }
+  return { checked: missing.length, updated };
 }
 
 /**

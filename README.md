@@ -70,11 +70,11 @@ Necesitas: Postgres, Redis, y tres procesos: `api`, `worker`, `web`. El worker *
 
 Variables por servicio:
 
-| Servicio | Variables                                                                                                                                                                                                                |
-| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| api      | `NODE_ENV=production`, `DATABASE_URL`, `REDIS_URL`, `WEB_ORIGIN`, `JWT_SECRET`, `ENCRYPTION_KEY`, `ADMIN_EMAIL`, `REGISTRATION_ENABLED`, `FREE_PLAN_MAX_ARTICLES`, opcional `STRIPE_*` (ver Stripe)                      |
-| worker   | `NODE_ENV=production`, `DATABASE_URL`, `REDIS_URL`, `ENCRYPTION_KEY` (la **misma** que la api), `ANTHROPIC_API_KEY`, `DEFAULT_MODEL`, `FREE_PLAN_MAX_ARTICLES`, opcional `SERPAPI_KEY`, `WORKER_CONCURRENCY`             |
-| web      | `API_UPSTREAM` = URL interna de la api (p. ej. `http://api:3000`). nginx sirve el frontend y proxea `/api` y `/admin` a la api: el navegador ve un solo origen, así la cookie de sesión funciona sin CORS ni TLS cruzado |
+| Servicio | Variables                                                                                                                                                                                                                                         |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| api      | `NODE_ENV=production`, `DATABASE_URL`, `REDIS_URL`, `WEB_ORIGIN`, `JWT_SECRET`, `ENCRYPTION_KEY`, `ADMIN_EMAIL`, `REGISTRATION_ENABLED`, `FREE_PLAN_MAX_ARTICLES`, opcional `STRIPE_*` (ver Stripe)                                               |
+| worker   | `NODE_ENV=production`, `DATABASE_URL`, `REDIS_URL`, `ENCRYPTION_KEY` (la **misma** que la api), `ANTHROPIC_API_KEY`, `DEFAULT_MODEL`, `FREE_PLAN_MAX_ARTICLES`, opcionales `SERPAPI_KEY`, `DATAFORSEO_*`, `GOOGLE_CLIENT_*`, `WORKER_CONCURRENCY` |
+| web      | `API_UPSTREAM` = URL interna de la api (p. ej. `http://api:3000`). nginx sirve el frontend y proxea `/api` y `/admin` a la api: el navegador ve un solo origen, así la cookie de sesión funciona sin CORS ni TLS cruzado                          |
 
 `WEB_ORIGIN` debe ser exactamente la URL pública del frontend (con `https://`).
 
@@ -146,6 +146,16 @@ fly deploy --config fly.api.toml
 Idempotentes, con `JobRun` al empezar y al acabar (duración, tokens, error), 3 intentos con backoff exponencial desde 30 s (los 429/5xx de Anthropic se reintentan; los 4xx no). Un vigilante devuelve a `pending` lo que lleve >20 min en `processing`. Toda salida estructurada de Claude va por _tool use_ validado con zod. Los prompts están versionados en `packages/core/src/ai/prompts/`.
 
 Generar a mano (botón _Generar artículo_) se detiene en `ready` para que lo revises. La **cadencia automática** (Ajustes) genera cada día/semana la mejor keyword pendiente y la envía a WordPress (como borrador salvo que actives la publicación automática).
+
+## Calidad de los artículos
+
+- **SERP antes del esquema** (`SERPAPI_KEY`): el top 10 de Google para la keyword, con los H2/H3 y la longitud de los 5 primeros, entra en el prompt del esquema (cubrir lo que todos tratan y añadir lo que falta). Se guarda en `Article.serp` y el editor lo muestra.
+- **Volumen y dificultad** (`DATAFORSEO_*`): discover mezcla la puntuación de Claude (60 %) con la demanda real (40 %); `sync` completa cada día las keywords manuales o de Search Console que no las tienen.
+- **Productos**: con WooCommerce, el artículo puede recomendar hasta 3 productos que encajen (Store API pública); se insertan con el shortcode nativo `[products ids="…"]` (precio, stock y botón siempre al día) y la foto del primero pasa a ser la imagen destacada. Se desactiva en Ajustes.
+- **Datos estructurados**: FAQPage generado de las preguntas **visibles** del artículo (h3 de la última sección) y Article solo si no hay Yoast/Rank Math (ellos ya lo emiten). Lo imprime el conector.
+- **E-E-A-T**: en Ajustes, la experiencia real del negocio (única fuente de afirmaciones de primera mano) y el autor de WordPress que firma.
+- **Análisis on-page** en el editor (`analyzeOnPage` en `@seo/shared`): keyword en título/meta/URL/intro/H2, densidad, longitudes, enlaces internos, FAQ y longitud de frase.
+- Tablas permitidas para comparativas.
 
 ## Rendimiento: Search Console y ventas
 

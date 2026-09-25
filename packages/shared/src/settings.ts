@@ -28,6 +28,15 @@ export const siteSettingsSchema = z.object({
   autoPublish: z.boolean(),
   categoryId: z.number().int().positive().nullable(),
   model: z.string().trim().min(1).max(100).nullable(),
+  /**
+   * Experiencia real del negocio (años, especialidad, garantías, lo que ven con sus clientes).
+   * Se usa como fuente de primera mano en los artículos (E-E-A-T); nunca se inventa más.
+   */
+  expertise: z.string().trim().max(3000).nullable(),
+  /** Usuario de WordPress que firma los artículos. null = el de la contraseña de aplicación. */
+  authorId: z.number().int().positive().nullable(),
+  /** Recomendar productos de la tienda (WooCommerce) dentro de los artículos. */
+  productCards: z.boolean(),
   /** null = aún no sabemos; false = Yoast no expone su meta por REST. Lo rellena el sistema. */
   yoastMetaExposed: z.boolean().nullable(),
   /** Plugin SEO detectado (Yoast o Rank Math). Lo rellena el sistema al probar la conexión. */
@@ -51,6 +60,9 @@ export const DEFAULT_SETTINGS: SiteSettings = {
   autoPublish: false,
   categoryId: null,
   model: null,
+  expertise: null,
+  authorId: null,
+  productCards: true,
   yoastMetaExposed: null,
   seoPlugin: null,
   connectorVersion: null,
@@ -69,6 +81,9 @@ export const editableSettingsSchema = siteSettingsSchema
     autoPublish: true,
     categoryId: true,
     model: true,
+    expertise: true,
+    authorId: true,
+    productCards: true,
   })
   .partial();
 

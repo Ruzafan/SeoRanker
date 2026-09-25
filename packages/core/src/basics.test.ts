@@ -104,9 +104,16 @@ describe('cálculos', () => {
   });
   it('coste estimado', () => {
     expect(estimateCostCents('claude-sonnet-5', { inputTokens: 0, outputTokens: 0 })).toBe(0);
-    // 100k in * $3/M + 10k out * $15/M = $0.45
+    // 100k in * $2/M + 10k out * $10/M = $0.30
     expect(
       estimateCostCents('claude-sonnet-5', { inputTokens: 100_000, outputTokens: 10_000 }),
-    ).toBe(45);
+    ).toBe(30);
+    // Opus 5: $5/$25 → $0.75; Fable 5.1: $10/$50 → $1.50
+    expect(estimateCostCents('claude-opus-5', { inputTokens: 100_000, outputTokens: 10_000 })).toBe(
+      75,
+    );
+    expect(
+      estimateCostCents('claude-fable-5-1', { inputTokens: 100_000, outputTokens: 10_000 }),
+    ).toBe(150);
   });
 });

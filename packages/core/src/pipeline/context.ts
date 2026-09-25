@@ -18,6 +18,8 @@ export interface PipelineConfig {
   allowPrivateHosts: boolean;
   /** OAuth de Google (Search Console); sin él, `sync` se salta Search Console. */
   google?: GoogleConfig | undefined;
+  /** Volumen/dificultad de keywords (DataForSEO); sin él las keywords no tienen métricas de mercado. */
+  dataForSeo?: { login: string; password: string } | undefined;
 }
 
 export interface PipelineContext {

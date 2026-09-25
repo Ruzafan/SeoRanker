@@ -1,6 +1,23 @@
 import sanitizeHtml from 'sanitize-html';
 
-const ALLOWED_TAGS = ['h2', 'h3', 'p', 'ul', 'ol', 'li', 'strong', 'em', 'a', 'blockquote'];
+const ALLOWED_TAGS = [
+  'h2',
+  'h3',
+  'p',
+  'ul',
+  'ol',
+  'li',
+  'strong',
+  'em',
+  'a',
+  'blockquote',
+  'table',
+  'thead',
+  'tbody',
+  'tr',
+  'th',
+  'td',
+];
 
 /**
  * Sanea HTML generado por el modelo: lista blanca de etiquetas, sin h1, solo href en enlaces.
@@ -85,4 +102,49 @@ export function slugify(text: string): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 100);
+}
+
+/** Sustituye los marcadores [[product:ID]] por el shortcode de WooCommerce; los ID no ofrecidos se quitan. */
+export function applyProductCards(
+  html: string,
+  allowedIds: ReadonlySet<number>,
+): { html: string; productIds: number[] } {
+  const used: number[] = [];
+  const out = html
+    .replace(/<p>\s*\[\[product:(\d+)\]\]\s*<\/p>/g, (_m, id: string) => {
+      const n = Number(id);
+      if (!allowedIds.has(n) || used.includes(n)) return '';
+      used.push(n);
+      // Shortcode nativo de WooCommerce: precio, stock y botón de compra siempre al día.
+      return `\n[products ids="${n}" columns="1"]\n`;
+    })
+    .replace(/\[\[product:\d+\]\]/g, '');
+  return { html: out.trim(), productIds: used };
+}
+
+/** stripHtml deja un espacio donde había etiquetas ("tibia </strong>." → "tibia ."). */
+const tidy = (text: string): string => text.replace(/\s+([.,;:!?)»])/g, '$1');
+
+export interface FaqItem {
+  question: string;
+  answer: string;
+}
+
+/**
+ * Preguntas frecuentes tal y como se ven en el artículo: la última sección h2 cuyo contenido son
+ * pares h3 + párrafos. El JSON-LD debe reflejar el contenido visible, no el esquema previo.
+ */
+export function extractFaq(html: string): FaqItem[] {
+  const sections = html.split(/<h2>/i);
+  const last = sections.at(-1) ?? '';
+  const parts = last.split(/<h3>/i).slice(1);
+  return parts
+    .map((part) => {
+      const [q = '', rest = ''] = part.split(/<\/h3>/i);
+      return {
+        question: tidy(stripHtml(q)),
+        answer: tidy(stripHtml(rest.replace(/\[products[^\]]*\]/g, ''))),
+      };
+    })
+    .filter((f) => f.question.length > 3 && f.answer.length > 10);
 }

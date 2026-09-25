@@ -10,6 +10,8 @@ import { stripHtml } from '../html.js';
 import { assertPublicDestination } from '../url.js';
 import type {
   AttributedOrder,
+  Author,
+  StoreProduct,
   ConnectionResult,
   PostInfo,
   ContentItem,
@@ -46,6 +48,30 @@ const SEO_KEYS: Record<
 };
 const SCHEMA_KEY = '_seo_autopilot_schema';
 const MANAGED_KEY = '_seo_autopilot_managed';
+
+interface StoreApiProduct {
+  id: number;
+  name?: string;
+  permalink?: string;
+  prices?: { price?: string; currency_code?: string; currency_minor_unit?: number };
+  images?: { id?: number }[];
+}
+
+function toStoreProduct(p: StoreApiProduct): StoreProduct {
+  const minor = p.prices?.currency_minor_unit ?? 2;
+  const raw = p.prices?.price;
+  const price =
+    raw && /^\d+$/.test(raw)
+      ? `${(Number(raw) / 10 ** minor).toFixed(minor).replace('.', ',')} ${p.prices?.currency_code ?? ''}`.trim()
+      : null;
+  return {
+    id: p.id,
+    name: stripHtml(p.name ?? ''),
+    url: p.permalink ?? '',
+    price,
+    imageId: p.images?.[0]?.id ?? null,
+  };
+}
 
 interface Environment {
   seoPlugin: SeoPlugin | null;
@@ -319,6 +345,39 @@ export class WordPressAdapter implements PublishingAdapter {
     return { warnings: await this.applySeo(id, input.seo) };
   }
 
+  /**
+   * Store API de WooCommerce (pública): busca por el término y, si salen pocos, completa con los
+   * más vendidos para que el artículo pueda recomendar algo real de la tienda.
+   */
+  async searchProducts(query: string, limit: number): Promise<StoreProduct[]> {
+    const env = await this.environment();
+    if (env.woocommerce === false) return [];
+    const get = async (params: string): Promise<StoreProduct[]> => {
+      try {
+        const items = await this.requestUrl<StoreApiProduct[]>(
+          `${this.base}/wp-json/wc/store/v1/products?${params}`,
+          { auth: false },
+        );
+        return items.map(toStoreProduct).filter((p) => p.url);
+      } catch (err) {
+        if (err instanceof AppError && err.code === 'WP_REST_NOT_FOUND') return [];
+        throw err;
+      }
+    };
+    const found = await get(`search=${encodeURIComponent(query)}&per_page=${limit}`);
+    if (found.length >= Math.min(3, limit)) return found.slice(0, limit);
+    const popular = await get(`orderby=popularity&per_page=${limit}`);
+    const seen = new Set(found.map((p) => p.id));
+    return [...found, ...popular.filter((p) => !seen.has(p.id))].slice(0, limit);
+  }
+
+  async listAuthors(): Promise<Author[]> {
+    const users = await this.request<{ id: number; name?: string }[]>(
+      '/users?per_page=100&context=edit&capabilities=edit_posts&_fields=id,name',
+    );
+    return users.map((u) => ({ id: u.id, name: stripHtml(u.name ?? `#${u.id}`) }));
+  }
+
   async getPostsInfo(ids: number[]): Promise<PostInfo[]> {
     const out: PostInfo[] = [];
     for (let i = 0; i < ids.length; i += 100) {
@@ -363,6 +422,8 @@ export class WordPressAdapter implements PublishingAdapter {
     if (input.status !== undefined) body['status'] = input.status;
     if (input.excerpt !== undefined) body['excerpt'] = input.excerpt;
     if (input.categoryId) body['categories'] = [input.categoryId];
+    if (input.authorId) body['author'] = input.authorId;
+    if (input.featuredMediaId) body['featured_media'] = input.featuredMediaId;
     return body;
   }
 

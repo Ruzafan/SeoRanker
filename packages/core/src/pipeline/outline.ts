@@ -8,6 +8,7 @@ import {
   outlineUser,
   OUTLINE_PROMPT_VERSION,
 } from '../ai/prompts/outline.js';
+import { fetchSerp, medianWordCount, type SerpSnapshot } from '../keywords/serp.js';
 import { siteScope } from '../tenant.js';
 import { loadSite, modelFor, siteContext } from './common.js';
 import type { PipelineContext, RunInfo } from './context.js';
@@ -47,6 +48,16 @@ export function runOutline(ctx: PipelineContext, info: RunInfo): Promise<void> {
 
       await scope.keywords.updateById(keyword.id, { status: 'processing' });
       const settings = parseSettings(site.settings);
+      // Qué posiciona hoy en Google para esta keyword (si hay SERPAPI_KEY). Sin SERP se planifica igual.
+      let serp: SerpSnapshot | null = null;
+      if (ctx.config.serpApiKey) {
+        serp = await fetchSerp(
+          ctx.config.serpApiKey,
+          keyword.term,
+          { language: site.language, country: site.country },
+          { fetchFn: ctx.fetchFn ?? fetch, allowPrivateHosts: ctx.config.allowPrivateHosts },
+        );
+      }
       const result = await ctx.claude.callTool({
         model: modelFor(ctx, site),
         system: outlineSystem(siteContext(site)),
@@ -54,6 +65,7 @@ export function runOutline(ctx: PipelineContext, info: RunInfo): Promise<void> {
           keyword: keyword.term,
           intent: keyword.intent,
           wordCount: settings.wordCount,
+          serp: serp ? { snapshot: serp, medianWords: medianWordCount(serp) } : null,
         }),
         maxTokens: 3000,
         toolDescription: outlineToolDescription,
@@ -69,6 +81,7 @@ export function runOutline(ctx: PipelineContext, info: RunInfo): Promise<void> {
         slug: slugify(o.slug) || slugify(title),
         metaDescription: truncateAtWord(o.metaDescription.trim(), 155),
         outline: o as never,
+        ...(serp ? { serp: serp as never } : {}),
         status: 'draft',
       });
       await ctx.dispatcher.enqueue('write', {
@@ -76,7 +89,13 @@ export function runOutline(ctx: PipelineContext, info: RunInfo): Promise<void> {
         refId: article.id,
         chain: info.chain,
       });
-      return { meta: { articleId: article.id, prompt: OUTLINE_PROMPT_VERSION } };
+      return {
+        meta: {
+          articleId: article.id,
+          serpResults: serp?.results.length ?? 0,
+          prompt: OUTLINE_PROMPT_VERSION,
+        },
+      };
     },
     {
       onFailure: async (_err, willRetry) => {

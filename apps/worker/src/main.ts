@@ -63,6 +63,10 @@ async function main(): Promise<void> {
               redirectUri: '', // el worker solo refresca tokens
             }
           : undefined,
+      dataForSeo:
+        env.DATAFORSEO_LOGIN && env.DATAFORSEO_PASSWORD
+          ? { login: env.DATAFORSEO_LOGIN, password: env.DATAFORSEO_PASSWORD }
+          : undefined,
     },
     log: {
       info: (o, m) => log.info(o, m),

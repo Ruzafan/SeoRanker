@@ -1,5 +1,7 @@
 import { parseSettings } from '@seo/shared';
 import { AppError, notFound } from '../errors.js';
+import { extractFaq } from '../html.js';
+import { buildArticleSchema } from '../seo/schema.js';
 import { siteScope } from '../tenant.js';
 import { adapterFor, loadSite } from './common.js';
 import type { PipelineContext, RunInfo } from './context.js';
@@ -41,17 +43,32 @@ export function runPublish(ctx: PipelineContext, info: RunInfo): Promise<void> {
       const settings = parseSettings(site.settings);
       const keyword = article.keywordId ? await scope.keywords.findById(article.keywordId) : null;
       const status = settings.autoPublish ? 'publish' : 'draft';
+      const schemaJson = buildArticleSchema({
+        title: article.title,
+        description: article.metaDescription,
+        url: article.remoteUrl && !article.remoteUrl.includes('?p=') ? article.remoteUrl : null,
+        faq: extractFaq(article.contentHtml),
+        siteName: site.name,
+        siteUrl: site.url,
+        language: site.language,
+        includeArticle: settings.seoPlugin === null,
+        publishedAt: article.publishedAt,
+        updatedAt: article.updatedAt,
+      });
       const input = {
         title: article.title,
         content: article.contentHtml,
         slug: article.slug,
         status,
         categoryId: settings.categoryId,
+        authorId: settings.authorId,
+        featuredMediaId: article.featuredMediaId,
         ...(article.metaDescription ? { excerpt: article.metaDescription } : {}),
         seo: {
           ...(keyword ? { focusKeyword: keyword.term } : {}),
           ...(article.metaDescription ? { metaDescription: article.metaDescription } : {}),
           title: article.title,
+          ...(schemaJson ? { schemaJson } : {}),
         },
       } as const;
 

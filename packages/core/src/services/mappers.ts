@@ -66,13 +66,32 @@ export function toArticleSummary(a: Article): ArticleSummaryDto {
   };
 }
 
-export function toArticleDto(a: Article): ArticleDto {
+export function toArticleDto(a: Article, keyword: string | null = null): ArticleDto {
+  const serp = a.serp as {
+    fetchedAt?: string;
+    results?: { position: number; title: string; url: string; wordCount: number | null }[];
+    relatedQuestions?: string[];
+  } | null;
   return {
     ...toArticleSummary(a),
     metaDescription: a.metaDescription,
     contentHtml: a.contentHtml,
     outline: (a.outline as ArticleDto['outline']) ?? null,
     remotePostId: a.remotePostId,
+    keyword,
+    featuredMediaId: a.featuredMediaId,
+    serp: serp?.results
+      ? {
+          fetchedAt: serp.fetchedAt ?? '',
+          results: serp.results.map((r) => ({
+            position: r.position,
+            title: r.title,
+            url: r.url,
+            wordCount: r.wordCount,
+          })),
+          relatedQuestions: serp.relatedQuestions ?? [],
+        }
+      : null,
   };
 }
 

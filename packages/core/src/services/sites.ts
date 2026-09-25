@@ -201,3 +201,17 @@ export function decryptSiteCredentials(
 ): SiteCredentials {
   return decryptJson<SiteCredentials>(deps.encryptionKey, site.credentials);
 }
+
+/** Usuarios de WordPress que pueden firmar los artículos (ajuste "Autor"). */
+export async function listSiteAuthors(
+  deps: CoreDeps,
+  organizationId: string,
+  siteId: string,
+): Promise<{ id: number; name: string }[]> {
+  const site = await requireSite(deps.prisma, organizationId, siteId);
+  return createAdapter(site, {
+    encryptionKey: deps.encryptionKey,
+    allowPrivateHosts: deps.config.allowPrivateHosts,
+    fetchFn: deps.fetchFn,
+  }).listAuthors();
+}
