@@ -1,4 +1,4 @@
-import type { WarningCode } from '@seo/shared';
+import type { ConnectionDetails, WarningCode } from '@seo/shared';
 
 export interface CreatePostInput {
   title: string;
@@ -11,6 +11,8 @@ export interface CreatePostInput {
     focusKeyword?: string;
     metaDescription?: string;
     title?: string;
+    /** JSON-LD del artículo; lo imprime el conector en el <head>. */
+    schemaJson?: string;
   };
 }
 
@@ -31,7 +33,7 @@ export interface ConnectionResult {
   ok: boolean;
   /** "OK" o un código de error (WP_AUTH_FAILED, CONNECTION_FAILED…). */
   message: string;
-  details?: { yoastActive: boolean | null; yoastMetaExposed: boolean | null; siteName?: string };
+  details?: ConnectionDetails;
   warnings?: WarningCode[];
 }
 

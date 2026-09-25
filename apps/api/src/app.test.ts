@@ -389,11 +389,24 @@ describe.skipIf(!db)('API (integración con Postgres)', () => {
   });
 
   describe('keywords, artículos y colas', () => {
+    /** Alta de tienda y limpieza de lo que encola el alta guiada, para partir de cero. */
     async function setup() {
       const agent = await signup('a@test.com');
       const { body: site } = await agent.post('/api/v1/sites').send(siteBody);
+      dispatcher.calls.length = 0;
+      await prisma.jobRun.deleteMany();
       return { agent, site };
     }
+
+    it('alta guiada: crear una tienda encola voz de marca y discover', async () => {
+      const agent = await signup('a@test.com');
+      const { body: site } = await agent.post('/api/v1/sites').send(siteBody);
+      expect(dispatcher.calls.map((c) => [c.type, c.input.siteId])).toEqual([
+        ['brand-voice', site.id],
+        ['discover', site.id],
+      ]);
+      expect(site.settings.onboarding).toBe('pending');
+    });
 
     it('alta manual (normaliza y omite duplicados), listado con filtros y orden', async () => {
       const { agent, site } = await setup();
@@ -581,6 +594,7 @@ describe.skipIf(!db)('API (integración con Postgres)', () => {
       const a = await signup('a@test.com');
       const b = await signup('b@test.com');
       const { body: site } = await a.post('/api/v1/sites').send(siteBody);
+      dispatcher.calls.length = 0; // lo que encola el alta guiada no cuenta
       await a.post(`/api/v1/sites/${site.id}/keywords`).send({ terms: ['privada uno'] });
       const kw = (await a.get(`/api/v1/sites/${site.id}/keywords`)).body.items[0];
       const article = await prisma.article.create({

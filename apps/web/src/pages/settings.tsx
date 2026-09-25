@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { CheckCircle2, Plug, Save, Trash2 } from 'lucide-react';
+import { Plug, Save, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -21,7 +21,7 @@ import {
   cx,
   inputClass,
 } from '../components/ui';
-import { YOAST_SNIPPET } from '../lib/format';
+import { ConnectorCard } from '../components/connector';
 import { useDeleteSite, useSite, useTestConnection, useUpdateSite, withToast } from '../lib/hooks';
 import { cadenceLabel, errorMessages, warningMessages } from '../lib/i18n';
 
@@ -114,9 +114,6 @@ export function SettingsPage() {
     if (r) setResult(r);
   };
 
-  const yoastBroken =
-    result?.warnings.includes('YOAST_META_NOT_EXPOSED') || site.settings.yoastMetaExposed === false;
-
   return (
     <>
       <h1 className="mb-6 text-2xl font-semibold tracking-tight">Ajustes del sitio</h1>
@@ -202,13 +199,15 @@ export function SettingsPage() {
                   tone="green"
                   title={`Conexión correcta${result.details?.siteName ? ` con «${result.details.siteName}»` : ''}`}
                 >
-                  Yoast SEO:{' '}
-                  {result.details?.yoastActive === true
-                    ? 'detectado'
-                    : result.details?.yoastActive === false
-                      ? 'no detectado'
-                      : 'no se pudo comprobar'}
-                  .
+                  Plugin SEO:{' '}
+                  {result.details?.seoPlugin === 'yoast'
+                    ? 'Yoast SEO'
+                    : result.details?.seoPlugin === 'rankmath'
+                      ? 'Rank Math'
+                      : 'no detectado'}
+                  {' · '}WooCommerce: {result.details?.woocommerce ? 'sí' : 'no'}
+                  {result.details?.yoastMetaExposed === true &&
+                    ' · La meta SEO se guardará en tu plugin.'}
                 </Notice>
               ) : (
                 <Notice
@@ -217,43 +216,14 @@ export function SettingsPage() {
                   }
                 />
               )}
-              {result.warnings
-                .filter((w) => w !== 'YOAST_META_NOT_EXPOSED')
-                .map((w) => (
-                  <Notice key={w} title={warningMessages[w]} />
-                ))}
+              {result.warnings.map((w) => (
+                <Notice key={w} title={warningMessages[w]} />
+              ))}
             </div>
           )}
-          {yoastBroken && (
-            <Notice title={warningMessages.YOAST_META_NOT_EXPOSED}>
-              <p className="mb-2">
-                Para que la meta description y la keyword principal lleguen a Yoast, pega esto en el{' '}
-                <code>functions.php</code> de tu tema (o en un plugin de snippets):
-              </p>
-              <pre className="overflow-x-auto rounded bg-white/70 p-2 text-[11px] leading-snug dark:bg-black/30">
-                {YOAST_SNIPPET}
-              </pre>
-              <Button
-                type="button"
-                variant="secondary"
-                className="mt-2"
-                onClick={() =>
-                  void navigator.clipboard
-                    .writeText(YOAST_SNIPPET)
-                    .then(() => toast.success('Copiado'))
-                }
-              >
-                Copiar snippet
-              </Button>
-            </Notice>
-          )}
-          {!yoastBroken && result?.details?.yoastMetaExposed === true && (
-            <p className="flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400">
-              <CheckCircle2 className="h-3.5 w-3.5" /> Yoast expone sus campos por REST: la meta
-              description se guardará en Yoast.
-            </p>
-          )}
         </Card>
+
+        <ConnectorCard settings={site.settings} />
 
         <Card className="space-y-4">
           <h2 className="font-medium">Contenido y automatización</h2>

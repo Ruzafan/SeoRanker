@@ -10,6 +10,7 @@ import type { EnqueueInput, JobDispatcher, PipelineJobType } from '../queue.js';
 import { requireSite, siteScope } from '../tenant.js';
 import type { PipelineContext } from './context.js';
 import { runPipelineJob } from './index.js';
+import { startFirstArticle } from './onboarding.js';
 import { assertQuota } from './quota.js';
 import { runScheduler } from './scheduler.js';
 import { runWatchdog } from './watchdog.js';
@@ -300,6 +301,58 @@ describe.skipIf(!db)('pipeline (integración con Postgres)', () => {
       seedTerm: 'figuras',
       status: 'pending',
     });
+  });
+
+  it('alta guiada: el primer discover redacta el primer artículo (hasta ready) y solo una vez', async () => {
+    await prisma.site.update({
+      where: { id: siteId },
+      data: { settings: { ...DEFAULT_SETTINGS, seeds: ['figuras'], onboarding: 'pending' } },
+    });
+    const fetchFn = vi.fn(
+      async () => new Response(JSON.stringify(['q', ['figuras de resina', 'figuras baratas']])),
+    );
+    const claude = fakeClaude({
+      'Submit the evaluation of every candidate keyword.': () => ({
+        keywords: [
+          { term: 'figuras de resina', keep: true, score: 90, intent: 'commercial' },
+          { term: 'figuras baratas', keep: true, score: 40, intent: 'transactional' },
+        ],
+      }),
+    });
+    const ctx = { ...ctxWith(claude), fetchFn: fetchFn as unknown as typeof fetch };
+    await dispatcher.enqueue('discover', { siteId });
+    await drain(ctx);
+
+    const article = await prisma.article.findFirstOrThrow({ where: { siteId } });
+    expect(article.status).toBe('ready'); // borrador para revisar: no se publica solo
+    const kw = await prisma.keyword.findUniqueOrThrow({ where: { id: article.keywordId! } });
+    expect(kw.term).toBe('figuras de resina'); // la de mayor puntuación
+    const site = await prisma.site.findUniqueOrThrow({ where: { id: siteId } });
+    expect(site.settings).toMatchObject({ onboarding: 'done', seeds: ['figuras'] });
+    const discover = await prisma.jobRun.findFirstOrThrow({ where: { siteId, type: 'discover' } });
+    expect(discover.meta).toMatchObject({ firstArticle: { started: true, keywordId: kw.id } });
+
+    // Un segundo discover ya no genera nada por su cuenta.
+    await dispatcher.enqueue('discover', { siteId });
+    await drain(ctx);
+    expect(await prisma.article.count({ where: { siteId } })).toBe(1);
+  });
+
+  it('alta guiada sin cuota disponible: no encola y deja la keyword pendiente', async () => {
+    await prisma.site.update({
+      where: { id: siteId },
+      data: { settings: { ...DEFAULT_SETTINGS, onboarding: 'pending' } },
+    });
+    await prisma.usageRecord.create({
+      data: { siteId, period: new Date().toISOString().slice(0, 7), articles: 2 },
+    });
+    const kw = await newKeyword('figuras de resina', 'pending', 90);
+    const res = await startFirstArticle(ctxWith(), siteId);
+    expect(res).toEqual({ started: false, reason: 'QUOTA_EXCEEDED' });
+    expect((await prisma.keyword.findUniqueOrThrow({ where: { id: kw.id } })).status).toBe(
+      'pending',
+    );
+    expect(dispatcher.queue).toHaveLength(0);
   });
 
   it('discover tolera intent/score raros de Claude: normaliza en vez de fallar el lote', async () => {

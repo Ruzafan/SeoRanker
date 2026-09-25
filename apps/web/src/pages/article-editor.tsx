@@ -14,7 +14,6 @@ import {
   cx,
   inputClass,
 } from '../components/ui';
-import { YOAST_SNIPPET } from '../lib/format';
 import {
   useArticle,
   useDeleteArticle,
@@ -161,15 +160,13 @@ export function ArticleEditorPage() {
       {yoastWarn && (
         <div className="mb-4">
           <Notice title={warningMessages.YOAST_META_NOT_EXPOSED}>
-            <p className="mb-2">
-              Pega este fragmento en el <code>functions.php</code> de tu tema (o en un plugin de
-              snippets) y vuelve a publicar:
-            </p>
-            <pre className="overflow-x-auto rounded bg-white/70 p-2 text-[11px] leading-snug dark:bg-black/30">
-              {YOAST_SNIPPET}
-            </pre>
-            <p className="mt-2">
-              Mientras tanto, la meta description se ha guardado como extracto del post.
+            <p>
+              Instala el{' '}
+              <Link to={`/sites/${siteId}/settings`} className="font-medium underline">
+                conector de WordPress
+              </Link>{' '}
+              (un clic, sin tocar código) y vuelve a publicar. Mientras tanto, la meta description
+              se ha guardado como extracto del post.
             </p>
           </Notice>
         </div>

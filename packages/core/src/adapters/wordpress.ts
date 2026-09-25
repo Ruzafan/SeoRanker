@@ -1,4 +1,10 @@
-import type { WarningCode } from '@seo/shared';
+import {
+  CONNECTOR_VERSION,
+  isOlderVersion,
+  type ConnectionDetails,
+  type SeoPlugin,
+  type WarningCode,
+} from '@seo/shared';
 import { AppError } from '../errors.js';
 import { stripHtml } from '../html.js';
 import { assertPublicDestination } from '../url.js';
@@ -20,11 +26,32 @@ export interface WordPressAdapterOptions {
   timeoutMs?: number;
 }
 
-const YOAST_KEYS = {
-  focusKeyword: '_yoast_wpseo_focuskw',
-  metaDescription: '_yoast_wpseo_metadesc',
-  title: '_yoast_wpseo_title',
-} as const;
+/** Campos de cada plugin SEO. Solo se pueden escribir por REST si están registrados con show_in_rest. */
+const SEO_KEYS: Record<
+  SeoPlugin,
+  { focusKeyword: string; metaDescription: string; title: string }
+> = {
+  yoast: {
+    focusKeyword: '_yoast_wpseo_focuskw',
+    metaDescription: '_yoast_wpseo_metadesc',
+    title: '_yoast_wpseo_title',
+  },
+  rankmath: {
+    focusKeyword: 'rank_math_focus_keyword',
+    metaDescription: 'rank_math_description',
+    title: 'rank_math_title',
+  },
+};
+const SCHEMA_KEY = '_seo_autopilot_schema';
+const MANAGED_KEY = '_seo_autopilot_managed';
+
+interface Environment {
+  seoPlugin: SeoPlugin | null;
+  yoastActive: boolean | null;
+  rankMathActive: boolean | null;
+  connectorVersion: string | null;
+  woocommerce: boolean | null;
+}
 
 interface WpRendered {
   rendered?: string;
@@ -113,43 +140,88 @@ export class WordPressAdapter implements PublishingAdapter {
   async testConnection(): Promise<ConnectionResult> {
     try {
       const me = await this.request<{ name?: string }>('/users/me?context=edit');
-      const [yoastActive, yoastMetaExposed] = await Promise.all([
-        this.detectYoast(),
-        this.detectYoastMetaExposed(),
-      ]);
+      const env = await this.environment();
+      const metaExposed = await this.detectMetaExposed(env.seoPlugin);
       const warnings: WarningCode[] = [];
-      if (yoastActive === false) warnings.push('YOAST_NOT_DETECTED');
-      if (yoastMetaExposed === false) warnings.push('YOAST_META_NOT_EXPOSED');
-      return {
-        ok: true,
-        message: 'OK',
-        details: { yoastActive, yoastMetaExposed, siteName: me.name },
-        warnings,
+      if (env.yoastActive === false && env.rankMathActive === false)
+        warnings.push('YOAST_NOT_DETECTED');
+      if (metaExposed === false) warnings.push('YOAST_META_NOT_EXPOSED');
+      if (env.connectorVersion === null) warnings.push('CONNECTOR_NOT_INSTALLED');
+      else if (isOlderVersion(env.connectorVersion, CONNECTOR_VERSION))
+        warnings.push('CONNECTOR_OUTDATED');
+      const details: ConnectionDetails = {
+        yoastActive: env.yoastActive,
+        rankMathActive: env.rankMathActive,
+        seoPlugin: env.seoPlugin,
+        yoastMetaExposed: metaExposed,
+        connectorVersion: env.connectorVersion,
+        woocommerce: env.woocommerce,
       };
+      if (me.name) details.siteName = me.name;
+      return { ok: true, message: 'OK', details, warnings };
     } catch (err) {
       if (err instanceof AppError) return { ok: false, message: err.code };
       throw err;
     }
   }
 
-  private async detectYoast(): Promise<boolean | null> {
-    try {
-      const root = await this.requestUrl<{ namespaces?: string[] }>(`${this.base}/wp-json/`, {
-        auth: false,
-      });
-      return (root.namespaces ?? []).some((n) => n.startsWith('yoast/'));
-    } catch {
-      return null;
-    }
+  private env: Promise<Environment> | undefined;
+
+  /** Plugins activos según los namespaces REST públicos (y el estado del conector). Se cachea. */
+  private environment(): Promise<Environment> {
+    this.env ??= (async () => {
+      let namespaces: string[] | null;
+      try {
+        const root = await this.requestUrl<{ namespaces?: string[] }>(`${this.base}/wp-json/`, {
+          auth: false,
+        });
+        namespaces = root.namespaces ?? [];
+      } catch {
+        namespaces = null;
+      }
+      const has = (prefix: string): boolean | null =>
+        namespaces === null ? null : namespaces.some((n) => n.startsWith(prefix));
+      let yoastActive = has('yoast/');
+      let rankMathActive = has('rankmath/');
+      let woocommerce = has('wc/');
+      let connectorVersion: string | null = null;
+      if (has('seo-autopilot/')) {
+        // El conector lo sabe con certeza (Rank Math no publica namespace hasta configurarlo).
+        try {
+          const status = await this.requestUrl<{
+            version?: string;
+            seoPlugin?: string | null;
+            woocommerce?: boolean;
+          }>(`${this.base}/wp-json/seo-autopilot/v1/status`);
+          connectorVersion = status.version ?? '0.0.0';
+          if (status.seoPlugin !== undefined) {
+            yoastActive = status.seoPlugin === 'yoast';
+            rankMathActive = status.seoPlugin === 'rankmath';
+          }
+          if (typeof status.woocommerce === 'boolean') woocommerce = status.woocommerce;
+        } catch {
+          connectorVersion = '0.0.0';
+        }
+      }
+      const seoPlugin: SeoPlugin | null = yoastActive
+        ? 'yoast'
+        : rankMathActive
+          ? 'rankmath'
+          : null;
+      return { seoPlugin, yoastActive, rankMathActive, connectorVersion, woocommerce };
+    })();
+    return this.env;
   }
 
-  /** Si el meta de Yoast está registrado con show_in_rest aparece en `meta` del post. */
-  private async detectYoastMetaExposed(): Promise<boolean | null> {
+  /** Si los campos del plugin SEO están registrados con show_in_rest aparecen en `meta` del post. */
+  private async detectMetaExposed(plugin: SeoPlugin | null): Promise<boolean | null> {
     try {
       const posts = await this.request<WpPost[]>('/posts?per_page=1&context=edit&_fields=id,meta');
       const first = posts[0];
       if (!first?.meta) return posts.length === 0 ? null : false;
-      return YOAST_KEYS.metaDescription in first.meta;
+      const meta = first.meta;
+      const plugins: SeoPlugin[] = plugin ? [plugin] : ['yoast', 'rankmath'];
+      return plugins.some((p) => SEO_KEYS[p].metaDescription in meta);
     } catch {
       return null;
     }
@@ -257,24 +329,39 @@ export class WordPressAdapter implements PublishingAdapter {
   }
 
   /**
-   * Yoast: el meta solo se acepta por REST si está registrado con show_in_rest. Lo enviamos aparte
-   * (para no fallar el post entero) y lo leemos de vuelta para saber si de verdad se aplicó.
+   * Plugin SEO (Yoast o Rank Math): su meta solo se acepta por REST si está registrada con
+   * show_in_rest (lo hace el conector). Se envía aparte para no fallar el post entero y se lee de
+   * vuelta para saber si de verdad se aplicó. Sin plugin detectado se escriben los dos juegos.
    */
   private async applySeo(id: number, seo: CreatePostInput['seo']): Promise<WarningCode[]> {
     if (!seo) return [];
+    const env = await this.environment();
+    const plugins: SeoPlugin[] = env.seoPlugin ? [env.seoPlugin] : ['yoast', 'rankmath'];
     const meta: Record<string, string> = {};
-    if (seo.focusKeyword) meta[YOAST_KEYS.focusKeyword] = seo.focusKeyword;
-    if (seo.metaDescription) meta[YOAST_KEYS.metaDescription] = seo.metaDescription;
-    if (seo.title) meta[YOAST_KEYS.title] = seo.title;
+    for (const p of plugins) {
+      const keys = SEO_KEYS[p];
+      if (seo.focusKeyword) meta[keys.focusKeyword] = seo.focusKeyword;
+      if (seo.metaDescription) meta[keys.metaDescription] = seo.metaDescription;
+      if (seo.title) meta[keys.title] = seo.title;
+    }
+    const seoKeys = Object.keys(meta);
+    if (seo.schemaJson !== undefined) meta[SCHEMA_KEY] = seo.schemaJson;
     if (Object.keys(meta).length === 0) return [];
+    meta[MANAGED_KEY] = '1';
 
     try {
       await this.request<WpPost>(`/posts/${id}`, { method: 'POST', body: { meta } });
+      if (seoKeys.length === 0) return [];
       const back = await this.request<WpPost>(`/posts/${id}?context=edit&_fields=id,meta`);
-      const check = seo.metaDescription
-        ? YOAST_KEYS.metaDescription
-        : (Object.keys(meta)[0] ?? YOAST_KEYS.metaDescription);
-      return back.meta?.[check] === meta[check] ? [] : ['YOAST_META_NOT_EXPOSED'];
+      const checks = plugins.map((p) => {
+        const k = SEO_KEYS[p];
+        return seo.metaDescription
+          ? k.metaDescription
+          : seo.focusKeyword
+            ? k.focusKeyword
+            : k.title;
+      });
+      return checks.some((key) => back.meta?.[key] === meta[key]) ? [] : ['YOAST_META_NOT_EXPOSED'];
     } catch (err) {
       if (err instanceof AppError && err.code === 'WP_AUTH_FAILED') throw err;
       return ['YOAST_META_NOT_EXPOSED'];

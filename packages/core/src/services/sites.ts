@@ -40,7 +40,7 @@ export async function createSite(
     username: input.wpUsername,
     appPassword: input.wpAppPassword,
   };
-  return deps.prisma.site.create({
+  const site = await deps.prisma.site.create({
     data: {
       organizationId,
       name: input.name,
@@ -49,9 +49,19 @@ export async function createSite(
       language: input.language,
       country: input.country,
       credentials: encryptJson(deps.encryptionKey, credentials),
-      settings: DEFAULT_SETTINGS as never,
+      settings: { ...DEFAULT_SETTINGS, onboarding: 'pending' } as never,
     },
   });
+  // Primer resultado cuanto antes: voz de marca y keywords ya; al acabar discover se redacta el
+  // primer artículo (ver pipeline/onboarding.ts). Si la cola no está disponible, el alta sigue siendo
+  // válida y el usuario puede lanzarlo a mano.
+  try {
+    await deps.dispatcher.enqueue('brand-voice', { siteId: site.id });
+    await deps.dispatcher.enqueue('discover', { siteId: site.id });
+  } catch {
+    // CONNECTION_FAILED al encolar: ya quedó anotado en el JobRun.
+  }
+  return site;
 }
 
 /** Lanza PLAN_SITE_LIMIT si el plan de la organización no admite otra tienda. */
@@ -132,14 +142,18 @@ export async function testSiteConnection(
     fetchFn: deps.fetchFn,
   });
   const result = await adapter.testConnection();
-  const exposed = result.details?.yoastMetaExposed;
-  if (result.ok && exposed !== undefined && exposed !== null) {
+  const d = result.details;
+  if (result.ok && d) {
     const settings = parseSettings(site.settings);
-    if (settings.yoastMetaExposed !== exposed) {
-      await deps.prisma.site.update({
-        where: { id: site.id },
-        data: { settings: { ...settings, yoastMetaExposed: exposed } },
-      });
+    const next = {
+      ...settings,
+      ...(d.yoastMetaExposed !== null ? { yoastMetaExposed: d.yoastMetaExposed } : {}),
+      ...(d.seoPlugin !== null || d.yoastActive !== null ? { seoPlugin: d.seoPlugin } : {}),
+      ...(d.woocommerce !== null ? { woocommerce: d.woocommerce } : {}),
+      connectorVersion: d.connectorVersion,
+    };
+    if (JSON.stringify(next) !== JSON.stringify(settings)) {
+      await deps.prisma.site.update({ where: { id: site.id }, data: { settings: next } });
     }
   }
   return {

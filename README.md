@@ -44,27 +44,20 @@ pnpm dev:web    # http://localhost:8080 (proxy a la API en :3000)
 ## Cómo conectar WordPress
 
 1. WordPress ≥ 5.6 → _Usuarios → Perfil → Contraseñas de aplicación_ → crea una y cópiala (`xxxx xxxx …`).
-2. En la app: _Añadir sitio_ con la URL, el usuario y esa contraseña. No hay que instalar nada en WordPress.
-3. _Ajustes → Probar conexión_.
+2. En la app: _Añadir sitio_ con la URL, el usuario y esa contraseña. Al darla de alta se analiza la voz de marca, se descubren keywords y se redacta el **primer artículo** (queda como borrador en _Artículos_).
+3. Recomendado: instala el conector (abajo) y pulsa _Ajustes → Probar conexión_.
 
-### Yoast: meta description y keyword principal
+### Conector de WordPress (Yoast SEO / Rank Math / JSON-LD)
 
-WordPress solo acepta meta por REST si está registrada con `show_in_rest`. Yoast no lo hace, así que la app **lo detecta y avisa** (en Ajustes y en el editor del artículo). Pega esto en el `functions.php` de tu tema (o en un plugin de snippets) y vuelve a publicar:
+El panel ofrece un plugin ligero, **SEO Autopilot Connector** (`apps/wp-plugin`, se descarga como ZIP desde _Ajustes → Conector de WordPress_; el build del frontend lo empaqueta en `/downloads/seo-autopilot-connector.zip`). Hace tres cosas:
 
-```php
-add_action('init', function () {
-  foreach (['_yoast_wpseo_focuskw', '_yoast_wpseo_metadesc', '_yoast_wpseo_title'] as $key) {
-    register_post_meta('post', $key, [
-      'show_in_rest'  => true,
-      'single'        => true,
-      'type'          => 'string',
-      'auth_callback' => function () { return current_user_can('edit_posts'); },
-    ]);
-  }
-});
-```
+- Registra con `show_in_rest` los campos de **Yoast** (`_yoast_wpseo_*`) y **Rank Math** (`rank_math_*`), para que la keyword principal, la meta description y el título SEO se puedan escribir por la API.
+- Imprime en el `<head>` el JSON-LD de cada artículo (preguntas frecuentes), guardado en `_seo_autopilot_schema`.
+- Expone `/wp-json/seo-autopilot/v1/status` (versión, plugin SEO activo, WooCommerce). _Probar conexión_ lo usa y avisa si falta o está desactualizado.
 
-Mientras no esté, la meta description se guarda igualmente como extracto del post.
+Verificado contra WordPress 6 real (Docker): con **Yoast 28.5** la meta se guarda incluso sin el conector (las versiones recientes de Yoast ya la exponen) y la meta description aparece en la página; el JSON-LD solo con el conector. Con **Rank Math** los datos se guardan en sus campos nativos; que los pinte en el `<head>` depende de completar su asistente de configuración.
+
+Sin conector ni plugin, la meta description se guarda igualmente como extracto del post. Quien no quiera instalar plugins tiene un snippet equivalente (sin JSON-LD) en el mismo panel.
 
 ## Variables de entorno
 

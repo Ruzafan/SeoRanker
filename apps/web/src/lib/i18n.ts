@@ -56,8 +56,12 @@ export function parseJobError(error: string | null): { text: string; detail: str
 
 export const warningMessages: Record<WarningCode, string> = {
   YOAST_META_NOT_EXPOSED:
-    'Yoast no expone sus campos por la API REST: la meta description y la keyword principal no se han podido guardar en Yoast.',
-  YOAST_NOT_DETECTED: 'No se ha detectado Yoast SEO en el sitio.',
+    'Tu plugin SEO no expone sus campos por la API REST: la meta description y la keyword principal no se han podido guardar. Instala el conector.',
+  YOAST_NOT_DETECTED:
+    'No se ha detectado Yoast SEO ni Rank Math. Los artículos se publican igual, pero sin su meta SEO.',
+  CONNECTOR_NOT_INSTALLED:
+    'El conector de WordPress no está instalado: sin él no se guardan la meta SEO ni los datos estructurados.',
+  CONNECTOR_OUTDATED: 'Hay una versión nueva del conector de WordPress. Descárgala y actualízalo.',
 };
 
 export const keywordStatusLabel: Record<KeywordStatus, string> = {

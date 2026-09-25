@@ -1,5 +1,5 @@
 import type { ArticleStatus, JobType, KeywordStatus } from './schemas.js';
-import type { SiteSettings } from './settings.js';
+import type { SeoPlugin, SiteSettings } from './settings.js';
 import type { WarningCode } from './errors.js';
 
 /** Todas las fechas viajan como ISO string. Nunca se incluye `credentials`. */
@@ -142,11 +142,24 @@ export interface SiteOverviewItem {
   lastFailure: { type: string; error: string | null; at: string } | null;
 }
 
+/** Lo que se detecta del WordPress al probar la conexión. null = no se pudo averiguar. */
+export interface ConnectionDetails {
+  yoastActive: boolean | null;
+  rankMathActive: boolean | null;
+  seoPlugin: SeoPlugin | null;
+  /** Los campos del plugin SEO se pueden escribir por REST (conector o snippet instalados). */
+  yoastMetaExposed: boolean | null;
+  /** Versión del plugin SEO Autopilot Connector; null si no está instalado. */
+  connectorVersion: string | null;
+  woocommerce: boolean | null;
+  siteName?: string;
+}
+
 export interface ConnectionTestDto {
   ok: boolean;
   /** Código (WP_AUTH_FAILED, CONNECTION_FAILED…) o "OK". Nunca texto localizado. */
   message: string;
-  details?: { yoastActive: boolean | null; yoastMetaExposed: boolean | null; siteName?: string };
+  details?: ConnectionDetails;
   warnings: WarningCode[];
 }
 

@@ -20,6 +20,7 @@ import { siteScope } from '../tenant.js';
 import { loadSite, modelFor, siteContext } from './common.js';
 import type { PipelineContext, RunInfo } from './context.js';
 import { runTracked } from './run-tracked.js';
+import { startFirstArticle } from './onboarding.js';
 import { generateSeeds } from './seeds.js';
 
 const MAX_CANDIDATES = 300;
@@ -120,10 +121,21 @@ export function runDiscover(ctx: PipelineContext, info: RunInfo): Promise<void> 
       inserted += created.count;
     }
 
+    // Se releen los ajustes: el usuario (o una prueba de conexión) pudo cambiarlos mientras tanto.
+    const latest = parseSettings((await loadSite(ctx, site.id)).settings);
+    const onboarding = latest.onboarding === 'pending';
     await ctx.prisma.site.update({
       where: { id: site.id },
-      data: { settings: { ...settings, lastDiscoverAt: new Date().toISOString() } },
+      data: {
+        settings: {
+          ...latest,
+          seeds: settings.seeds,
+          lastDiscoverAt: new Date().toISOString(),
+          ...(onboarding ? { onboarding: 'done' as const } : {}),
+        },
+      },
     });
+    const firstArticle = onboarding ? await startFirstArticle(ctx, site.id) : undefined;
 
     return {
       meta: {
@@ -134,6 +146,7 @@ export function runDiscover(ctx: PipelineContext, info: RunInfo): Promise<void> 
         scored: fresh.length,
         inserted,
         discarded,
+        ...(firstArticle ? { firstArticle } : {}),
         prompt: SCORE_KEYWORDS_PROMPT_VERSION,
       },
     };

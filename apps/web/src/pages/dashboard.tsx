@@ -7,11 +7,13 @@ import {
   Card,
   EmptyState,
   ErrorBanner,
+  Notice,
   PageHeader,
   Spinner,
   StatusBadge,
   cx,
 } from '../components/ui';
+import { connectorState } from '../components/connector';
 import { api } from '../lib/api';
 import {
   formatCents,
@@ -74,6 +76,12 @@ export function DashboardPage() {
       hint: 'Usuario y contraseña de aplicación.',
     },
     {
+      done: connectorState(site.settings) === 'ok',
+      label: 'Instala el conector',
+      to: 'settings',
+      hint: 'Plugin de un clic para la meta de Yoast/Rank Math y el FAQ en Google.',
+    },
+    {
       done: !!site.brandVoice,
       label: 'Genera la voz de marca',
       to: 'voice',
@@ -115,6 +123,19 @@ export function DashboardPage() {
           </>
         }
       />
+
+      {site.settings.onboarding === 'pending' && (
+        <div className="mb-6">
+          <Notice tone="blue" title="Estamos preparando tu primer artículo">
+            Analizamos el estilo de tu tienda y buscamos lo que tus clientes preguntan en Google. En
+            unos minutos tendrás un borrador listo para revisar en{' '}
+            <Link to="articles" className="underline">
+              Artículos
+            </Link>
+            .
+          </Notice>
+        </div>
+      )}
 
       {!setupDone && (
         <Card className="mb-6">

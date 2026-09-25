@@ -1,8 +1,9 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { wpPluginZip } from './wp-plugin-zip';
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), wpPluginZip()],
   server: {
     port: 8080,
     proxy: {
