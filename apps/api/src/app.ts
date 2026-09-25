@@ -14,6 +14,7 @@ import { registerAuth } from './plugins/auth.js';
 import { registerErrorHandler } from './plugins/error-handler.js';
 import { authRoutes } from './routes/auth.js';
 import { billingRoutes } from './routes/billing.js';
+import { integrationRoutes } from './routes/integrations.js';
 import { healthRoutes, type HealthChecks } from './routes/health.js';
 import { adminRoutes, resourceRoutes } from './routes/resources.js';
 
@@ -91,6 +92,7 @@ export async function buildApp({
         }),
       );
       await v1.register(billingRoutes(core, auth));
+      await v1.register(integrationRoutes(core, auth, env.WEB_ORIGIN));
       await v1.register(resourceRoutes(core, auth));
       await v1.register(adminRoutes(core, auth));
     },

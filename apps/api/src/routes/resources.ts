@@ -11,6 +11,13 @@ import {
   discoverKeywords,
   generateFromKeyword,
   getArticle,
+  getPerformance,
+  getSearchConsoleStatus,
+  listSearchConsoleProperties,
+  selectSearchConsoleProperty,
+  disconnectSearchConsole,
+  startGoogleConnect,
+  syncSiteNow,
   getSiteStats,
   getSitesOverview,
   getUsage,
@@ -42,6 +49,7 @@ import {
   pageQuerySchema,
   patchArticleSchema,
   patchKeywordSchema,
+  selectPropertySchema,
   updateSiteSchema,
 } from '@seo/shared';
 import type { AuthHelpers } from '../plugins/auth.js';
@@ -173,6 +181,43 @@ export function resourceRoutes(deps: CoreDeps, auth: AuthHelpers) {
     app.post('/articles/:id/regenerate', async (req, reply) => {
       const { id } = idParam.parse(req.params);
       return reply.status(202).send(await regenerateArticle(deps, org(req), id));
+    });
+
+    // ---- Search Console, sincronización y rendimiento -----------------
+    app.get('/sites/:id/search-console', async (req) => {
+      const { id } = idParam.parse(req.params);
+      return getSearchConsoleStatus(deps, org(req), id);
+    });
+
+    app.post('/sites/:id/search-console/connect', async (req) => {
+      const { id } = idParam.parse(req.params);
+      return startGoogleConnect(deps, org(req), req.auth.userId, id);
+    });
+
+    app.get('/sites/:id/search-console/properties', async (req) => {
+      const { id } = idParam.parse(req.params);
+      return listSearchConsoleProperties(deps, org(req), id);
+    });
+
+    app.patch('/sites/:id/search-console', async (req) => {
+      const { id } = idParam.parse(req.params);
+      return selectSearchConsoleProperty(deps, org(req), id, selectPropertySchema.parse(req.body));
+    });
+
+    app.delete('/sites/:id/search-console', async (req, reply) => {
+      const { id } = idParam.parse(req.params);
+      await disconnectSearchConsole(deps, org(req), id);
+      return reply.status(204).send();
+    });
+
+    app.post('/sites/:id/sync', async (req, reply) => {
+      const { id } = idParam.parse(req.params);
+      return reply.status(202).send(await syncSiteNow(deps, org(req), id));
+    });
+
+    app.get('/sites/:id/performance', async (req) => {
+      const { id } = idParam.parse(req.params);
+      return getPerformance(deps, org(req), id);
     });
 
     // ---- Jobs, uso y estadísticas -------------------------------------

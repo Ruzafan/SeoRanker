@@ -24,12 +24,19 @@ export async function listKeywords(
   const scope = siteScope(deps.prisma, siteId);
   const where: Prisma.KeywordWhereInput = {
     ...(q.status ? { status: q.status } : {}),
+    ...(q.source ? { source: q.source } : {}),
     ...(q.search ? { term: { contains: q.search, mode: 'insensitive' } } : {}),
   };
   const [items, total] = await Promise.all([
     scope.keywords.findMany({
       where,
-      orderBy: [{ [q.sort]: q.order }, { id: 'asc' }],
+      // Volumen e impresiones pueden faltar: los vacíos van siempre al final.
+      orderBy: [
+        q.sort === 'volume' || q.sort === 'gscImpressions'
+          ? { [q.sort]: { sort: q.order, nulls: 'last' } }
+          : { [q.sort]: q.order },
+        { id: 'asc' },
+      ],
       skip: (q.page - 1) * q.pageSize,
       take: q.pageSize,
     }),

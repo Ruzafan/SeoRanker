@@ -48,8 +48,18 @@ const envSchema = z
     STRIPE_PRICE_PRO: z.preprocess(emptyToUndefined, z.string().startsWith('price_').optional()),
     STRIPE_PRICE_AGENCY: z.preprocess(emptyToUndefined, z.string().startsWith('price_').optional()),
     STRIPE_AUTOMATIC_TAX: z.preprocess(emptyToUndefined, bool.default(false)),
+    // Search Console (opcional): cliente OAuth "Aplicación web" de Google Cloud.
+    GOOGLE_CLIENT_ID: z.preprocess(emptyToUndefined, z.string().optional()),
+    GOOGLE_CLIENT_SECRET: z.preprocess(emptyToUndefined, z.string().optional()),
   })
   .superRefine((e, ctx) => {
+    if (!!e.GOOGLE_CLIENT_ID !== !!e.GOOGLE_CLIENT_SECRET) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['GOOGLE_CLIENT_SECRET'],
+        message: 'GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET van juntas',
+      });
+    }
     if (!e.STRIPE_SECRET_KEY) return;
     for (const key of [
       'STRIPE_WEBHOOK_SECRET',

@@ -2,7 +2,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Globe, Plus } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import type { z } from 'zod';
-import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   PLATFORM_IDS,
@@ -25,11 +26,20 @@ import {
   inputClass,
 } from '../components/ui';
 import { useCreateSite, useSites, useSitesOverview } from '../lib/hooks';
-import { jobTypeLabel, parseJobError } from '../lib/i18n';
+import { errorMessages, jobTypeLabel, parseJobError } from '../lib/i18n';
 
 /** Raíz: con un solo sitio entra directo a su panel; si no, muestra el selector. */
 export function HomeRedirect() {
   const { data: sites, isLoading, error } = useSites();
+  const [params] = useSearchParams();
+  const gscError = params.get('gsc') === 'error' ? params.get('code') : null;
+  useEffect(() => {
+    // Vuelta fallida de Google (permiso denegado, state caducado…): se avisa y se sigue.
+    if (gscError)
+      toast.error(
+        errorMessages[gscError as keyof typeof errorMessages] ?? errorMessages.GOOGLE_AUTH_FAILED,
+      );
+  }, [gscError]);
   if (isLoading) return <Spinner />;
   if (error) return <ErrorBanner error={error} />;
   const only = sites?.length === 1 ? sites[0] : undefined;

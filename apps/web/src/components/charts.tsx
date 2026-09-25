@@ -111,11 +111,13 @@ function YAxis({
 }
 
 function XLabels({ labels, xAt }: { labels: string[]; xAt: (i: number) => number }) {
+  // Como mucho ~8 etiquetas (en móvil se leen mejor uno de cada dos con series cortas).
+  const step = Math.max(2, Math.ceil(labels.length / 8));
+  const last = labels.length - 1;
   return (
     <g>
       {labels.map((l, i) =>
-        // En móvil se leen mejor uno de cada dos.
-        i % 2 === 0 || i === labels.length - 1 ? (
+        i % step === 0 || (i === last && last % step >= step / 2) ? (
           <text
             key={l}
             x={xAt(i)}

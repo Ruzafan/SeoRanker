@@ -97,3 +97,41 @@ async function mark(
     },
   });
 }
+
+const SYNC_EVERY_MS = 20 * HOUR;
+
+/**
+ * Encola `sync` (posts, Search Console, pedidos) una vez al día por sitio activo que tenga algo que
+ * sincronizar: Search Console conectado o artículos enviados a WordPress.
+ */
+export async function runSyncScheduler(
+  ctx: PipelineContext,
+  now: Date = new Date(),
+): Promise<{ enqueued: number }> {
+  const sites = await ctx.prisma.site.findMany({
+    where: {
+      active: true,
+      OR: [
+        { searchConsole: { isNot: null } },
+        { articles: { some: { remotePostId: { not: null } } } },
+      ],
+    },
+    select: { id: true },
+  });
+  let enqueued = 0;
+  for (const site of sites) {
+    const last = await ctx.prisma.jobRun.findFirst({
+      where: { siteId: site.id, type: 'sync' },
+      orderBy: { createdAt: 'desc' },
+      select: { createdAt: true },
+    });
+    if (last && now.getTime() - last.createdAt.getTime() < SYNC_EVERY_MS) continue;
+    try {
+      await ctx.dispatcher.enqueue('sync', { siteId: site.id });
+      enqueued++;
+    } catch (err) {
+      ctx.log.warn({ siteId: site.id, reason: errorCode(err) }, 'sync scheduler skipped site');
+    }
+  }
+  return { enqueued };
+}

@@ -46,6 +46,14 @@ async function main(): Promise<void> {
       config: {
         allowPrivateHosts: env.ALLOW_PRIVATE_HOSTS,
         freePlanMaxArticles: env.FREE_PLAN_MAX_ARTICLES,
+        google:
+          env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
+            ? {
+                clientId: env.GOOGLE_CLIENT_ID,
+                clientSecret: env.GOOGLE_CLIENT_SECRET,
+                redirectUri: `${env.WEB_ORIGIN.replace(/\/+$/, '')}/api/v1/integrations/google/callback`,
+              }
+            : undefined,
       },
       billing,
     },

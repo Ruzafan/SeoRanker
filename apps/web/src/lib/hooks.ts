@@ -8,6 +8,9 @@ import type {
   BillingDto,
   CheckoutResultDto,
   PaidPlanId,
+  PerformanceDto,
+  SearchConsolePropertyDto,
+  SearchConsoleStatusDto,
   ConnectionTestDto,
   CreateSiteInput,
   EnqueuedDto,
@@ -173,8 +176,9 @@ export function useRefreshWhenIdle(siteId: string) {
 // ---- Keywords --------------------------------------------------------------
 export interface KeywordFilters {
   status?: string;
+  source?: string;
   search?: string;
-  sort: 'score' | 'createdAt' | 'term';
+  sort: 'score' | 'createdAt' | 'term' | 'volume' | 'gscImpressions';
   order: 'asc' | 'desc';
   page: number;
 }
@@ -265,6 +269,36 @@ export const useRegenerateArticle = (siteId: string, id: string) =>
   useArticleMutation(siteId, id, () => api.post<EnqueuedDto>(`/articles/${id}/regenerate`));
 export const useDeleteArticle = (siteId: string, id: string) =>
   useArticleMutation(siteId, id, () => api.delete(`/articles/${id}`));
+
+// ---- Rendimiento y Search Console ----------------------------------------------
+export const usePerformance = (siteId: string) =>
+  useQuery({
+    queryKey: ['site', siteId, 'performance'],
+    queryFn: () => api.get<PerformanceDto>(`/sites/${siteId}/performance`),
+  });
+
+export const useConnectSearchConsole = (siteId: string) =>
+  useMutation({
+    mutationFn: () => api.post<{ url: string }>(`/sites/${siteId}/search-console/connect`),
+    onSuccess: (res) => window.location.assign(res.url),
+  });
+
+export const useSearchConsoleProperties = (siteId: string, enabled: boolean) =>
+  useQuery({
+    queryKey: ['site', siteId, 'gsc-properties'],
+    queryFn: () =>
+      api.get<SearchConsolePropertyDto[]>(`/sites/${siteId}/search-console/properties`),
+    enabled,
+  });
+
+export const useSelectProperty = (siteId: string) =>
+  useSiteMutation(siteId, (propertyUrl: string) =>
+    api.patch<SearchConsoleStatusDto>(`/sites/${siteId}/search-console`, { propertyUrl }),
+  );
+export const useDisconnectSearchConsole = (siteId: string) =>
+  useSiteMutation(siteId, () => api.delete(`/sites/${siteId}/search-console`));
+export const useSyncSite = (siteId: string) =>
+  useSiteMutation(siteId, () => api.post<EnqueuedDto>(`/sites/${siteId}/sync`));
 
 // ---- Facturación -------------------------------------------------------------
 export const useBilling = () =>

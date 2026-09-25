@@ -1,4 +1,11 @@
-import type { ArticleStatus, ErrorCode, JobType, KeywordStatus, WarningCode } from '@seo/shared';
+import type {
+  ArticleStatus,
+  ErrorCode,
+  JobType,
+  KEYWORD_SOURCES,
+  KeywordStatus,
+  WarningCode,
+} from '@seo/shared';
 import { ApiError } from './api';
 
 /** Traducción de códigos de error del backend. Tipado exhaustivo: un código nuevo no compila sin traducir. */
@@ -28,6 +35,10 @@ export const errorMessages: Record<ErrorCode | 'NETWORK_ERROR', string> = {
   PLATFORM_NOT_SUPPORTED: 'Esa plataforma todavía no está disponible. De momento, WordPress.',
   BILLING_NOT_CONFIGURED: 'Los pagos no están activados en este servidor.',
   OWNER_REQUIRED: 'Solo el propietario de la cuenta puede hacer esto.',
+  GOOGLE_NOT_CONFIGURED: 'La conexión con Google no está activada en este servidor.',
+  GOOGLE_AUTH_FAILED: 'Google rechazó el acceso o ha caducado. Vuelve a conectar Search Console.',
+  GSC_NOT_CONNECTED: 'Conecta Search Console para ver esta información.',
+  PLAN_FEATURE_REQUIRED: 'Tu plan no incluye esta función. Puedes ampliarlo en Plan y facturación.',
   QUOTA_EXCEEDED:
     'Has alcanzado el límite mensual de artículos de tu plan. Puedes ampliarlo en Plan y facturación.',
   AI_ERROR: 'Falló la llamada a Claude. Suele ser temporal; reintenta en unos minutos.',
@@ -73,6 +84,14 @@ export const keywordStatusLabel: Record<KeywordStatus, string> = {
   discarded: 'Descartada',
 };
 
+export const keywordSourceLabel: Record<(typeof KEYWORD_SOURCES)[number], string> = {
+  manual: 'Manual',
+  autocomplete: 'Autocompletado de Google',
+  paa: 'La gente también pregunta',
+  gsc: 'Search Console (ya asomas)',
+  import: 'Importada',
+};
+
 export const articleStatusLabel: Record<ArticleStatus, string> = {
   draft: 'Borrador',
   writing: 'Redactando',
@@ -88,6 +107,7 @@ export const jobTypeLabel: Record<JobType, string> = {
   write: 'Redacción',
   publish: 'Publicación',
   'brand-voice': 'Voz de marca',
+  sync: 'Sincronización (Google y tienda)',
   watchdog: 'Vigilante',
   schedule: 'Programación',
 };

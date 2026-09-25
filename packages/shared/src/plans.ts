@@ -22,6 +22,8 @@ export interface PlanDef {
   whiteLabel: boolean;
   /** Seguimiento de visibilidad en asistentes de IA (ChatGPT, Perplexity…). */
   aiVisibility: boolean;
+  /** Ventas de WooCommerce atribuidas a los artículos. */
+  revenueAttribution: boolean;
   features: string[];
 }
 
@@ -35,9 +37,11 @@ export const PLANS: Record<PlanId, PlanDef> = {
     maxMembers: 1,
     whiteLabel: false,
     aiVisibility: false,
+    revenueAttribution: false,
     features: [
       '1 tienda',
       '3 artículos para probar',
+      'Search Console: clics y posiciones',
       'Keywords automáticas',
       'Borradores en tu CMS',
     ],
@@ -51,10 +55,11 @@ export const PLANS: Record<PlanId, PlanDef> = {
     maxMembers: 2,
     whiteLabel: false,
     aiVisibility: false,
+    revenueAttribution: false,
     features: [
       '1 tienda',
       '20 artículos al mes',
-      'Search Console: clics y posiciones',
+      'Oportunidades desde Search Console',
       'Publicación automática',
     ],
   },
@@ -67,6 +72,7 @@ export const PLANS: Record<PlanId, PlanDef> = {
     maxMembers: 5,
     whiteLabel: false,
     aiVisibility: true,
+    revenueAttribution: true,
     features: [
       'Hasta 5 tiendas',
       '100 artículos al mes',
@@ -84,6 +90,7 @@ export const PLANS: Record<PlanId, PlanDef> = {
     maxMembers: null,
     whiteLabel: true,
     aiVisibility: true,
+    revenueAttribution: true,
     features: [
       'Hasta 25 tiendas',
       '400 artículos al mes',

@@ -9,7 +9,9 @@ import { AppError } from '../errors.js';
 import { stripHtml } from '../html.js';
 import { assertPublicDestination } from '../url.js';
 import type {
+  AttributedOrder,
   ConnectionResult,
+  PostInfo,
   ContentItem,
   ContentSample,
   CreatePostInput,
@@ -315,6 +317,42 @@ export class WordPressAdapter implements PublishingAdapter {
   ): Promise<{ warnings?: WarningCode[] }> {
     await this.request<WpPost>(`/posts/${id}`, { method: 'POST', body: this.toBody(input) });
     return { warnings: await this.applySeo(id, input.seo) };
+  }
+
+  async getPostsInfo(ids: number[]): Promise<PostInfo[]> {
+    const out: PostInfo[] = [];
+    for (let i = 0; i < ids.length; i += 100) {
+      const chunk = ids.slice(i, i + 100);
+      const posts = await this.request<(WpPost & { status?: string })[]>(
+        `/posts?include=${chunk.join(',')}&per_page=100&status=any&context=edit&_fields=id,link,status`,
+      );
+      out.push(
+        ...posts.map((p) => ({ id: p.id, url: p.link ?? '', status: p.status ?? 'unknown' })),
+      );
+    }
+    return out;
+  }
+
+  async listAttributedOrders(
+    after: Date,
+    page: number,
+  ): Promise<{ orders: AttributedOrder[]; hasMore: boolean } | null> {
+    const env = await this.environment();
+    if (
+      !env.woocommerce ||
+      env.connectorVersion === null ||
+      isOlderVersion(env.connectorVersion, '1.1.0')
+    ) {
+      return null;
+    }
+    try {
+      return await this.requestUrl<{ orders: AttributedOrder[]; hasMore: boolean }>(
+        `${this.base}/wp-json/seo-autopilot/v1/orders?after=${encodeURIComponent(after.toISOString())}&page=${page}`,
+      );
+    } catch (err) {
+      if (err instanceof AppError && err.code === 'WP_REST_NOT_FOUND') return null;
+      throw err;
+    }
   }
 
   private toBody(input: Partial<CreatePostInput>): Record<string, unknown> {

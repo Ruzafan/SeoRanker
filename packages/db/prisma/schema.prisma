@@ -51,10 +51,13 @@ model Site {
   active         Boolean      @default(true)
   createdAt      DateTime     @default(now())
 
-  keywords Keyword[]
-  articles Article[]
-  jobs     JobRun[]
-  usage    UsageRecord[]
+  keywords      Keyword[]
+  articles      Article[]
+  jobs          JobRun[]
+  usage         UsageRecord[]
+  searchConsole SearchConsoleConnection?
+  metrics       ArticleMetric[]
+  conversions   ArticleConversion[]
 
   @@index([organizationId])
 }
@@ -71,6 +74,14 @@ model Keyword {
   seedTerm  String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // Métricas de mercado (proveedor de keywords, p. ej. DataForSEO) y de Search Console.
+  volume         Int? // búsquedas/mes
+  difficulty     Int? // 0-100
+  cpc            Float? // EUR
+  gscImpressions Int? // últimos 28 días
+  gscClicks      Int?
+  gscPosition    Float?
 
   articles Article[]
 
@@ -93,6 +104,8 @@ model Article {
   status          String    @default("draft") // draft | writing | ready | publishing | published | failed
   remotePostId    Int? // ID del post en WordPress
   remoteUrl       String?
+  remoteStatus    String? // estado del post en WordPress (draft | publish | future…), lo sincroniza `sync`
+  decayDetectedAt DateTime? // pierde clics en Search Console: candidato a refrescar
   wordCount       Int       @default(0)
   publishedAt     DateTime?
   createdAt       DateTime  @default(now())
@@ -100,6 +113,55 @@ model Article {
 
   @@index([siteId, status])
   @@index([status, updatedAt]) // watchdog de zombis
+
+  metrics     ArticleMetric[]
+  conversions ArticleConversion[]
+}
+
+/// Search Console de un sitio. El refresh token va cifrado (AES-256-GCM), como las credenciales de WP.
+model SearchConsoleConnection {
+  id          String    @id @default(cuid())
+  siteId      String    @unique
+  site        Site      @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  credentials String // JSON cifrado { refreshToken }
+  googleEmail String?
+  propertyUrl String? // "sc-domain:tienda.es" o "https://tienda.es/"
+  lastSyncAt  DateTime?
+  lastError   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+/// Rendimiento diario de un artículo en Google (Search Console).
+model ArticleMetric {
+  id          String   @id @default(cuid())
+  siteId      String
+  site        Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  articleId   String
+  article     Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  date        DateTime @db.Date
+  clicks      Int
+  impressions Int
+  position    Float
+
+  @@unique([articleId, date])
+  @@index([siteId, date])
+}
+
+/// Pedido de WooCommerce cuya sesión empezó en un artículo (atribución por página de entrada).
+model ArticleConversion {
+  id        String   @id @default(cuid())
+  siteId    String
+  site      Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  articleId String
+  article   Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  orderId   String
+  total     Float
+  currency  String
+  orderedAt DateTime
+
+  @@unique([siteId, orderId])
+  @@index([siteId, orderedAt])
 }
 
 model JobRun {

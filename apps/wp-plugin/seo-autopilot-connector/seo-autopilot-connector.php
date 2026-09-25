@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       SEO Autopilot Connector
  * Description:       Conecta tu tienda con SEO Autopilot: expone los campos de Yoast SEO y Rank Math a la API REST y publica los datos estructurados (JSON-LD) de los artículos generados.
- * Version:           1.0.0
+ * Version:           1.1.0
  * Requires at least: 5.6
  * Requires PHP:      7.4
  * Author:            SEO Autopilot
@@ -14,7 +14,7 @@ if (!defined('ABSPATH')) {
 	exit;
 }
 
-define('SEO_AUTOPILOT_CONNECTOR_VERSION', '1.0.0');
+define('SEO_AUTOPILOT_CONNECTOR_VERSION', '1.1.0');
 
 /**
  * Campos SEO que SEO Autopilot escribe por la API REST. Yoast y Rank Math no los registran con
@@ -68,6 +68,57 @@ add_action('rest_api_init', function () {
 				'seoPlugin'   => $seo_plugin,
 				'woocommerce' => class_exists('WooCommerce'),
 			);
+		},
+	));
+});
+
+/**
+ * Pedidos recientes con su página de entrada (atribución de pedidos de WooCommerce 8.5+).
+ * Solo lo necesario para atribuir ventas a artículos: sin nombres, emails ni direcciones.
+ */
+add_action('rest_api_init', function () {
+	register_rest_route('seo-autopilot/v1', '/orders', array(
+		'methods'             => 'GET',
+		'permission_callback' => function () {
+			return current_user_can('view_woocommerce_reports') || current_user_can('manage_woocommerce');
+		},
+		'args'                => array(
+			'after' => array('type' => 'string', 'required' => true),
+			'page'  => array('type' => 'integer', 'default' => 1, 'minimum' => 1),
+		),
+		'callback'            => function (WP_REST_Request $request) {
+			if (!function_exists('wc_get_orders')) {
+				return new WP_Error('seo_autopilot_no_woocommerce', 'WooCommerce is not active', array('status' => 404));
+			}
+			$after = strtotime((string) $request->get_param('after'));
+			if (!$after) {
+				return new WP_Error('seo_autopilot_bad_date', 'Invalid "after" date', array('status' => 400));
+			}
+			$orders = wc_get_orders(array(
+				'status'       => array('wc-processing', 'wc-completed'),
+				'date_created' => '>' . $after,
+				'limit'        => 100,
+				'page'         => (int) $request->get_param('page'),
+				'orderby'      => 'date',
+				'order'        => 'ASC',
+			));
+			$out = array();
+			foreach ($orders as $order) {
+				if (!($order instanceof WC_Order)) {
+					continue;
+				}
+				$created = $order->get_date_created();
+				$out[] = array(
+					'id'         => (string) $order->get_id(),
+					'total'      => (float) $order->get_total(),
+					'currency'   => $order->get_currency(),
+					'createdAt'  => $created ? $created->date(DATE_ATOM) : null,
+					'entry'      => (string) $order->get_meta('_wc_order_attribution_session_entry'),
+					'sourceType' => (string) $order->get_meta('_wc_order_attribution_source_type'),
+					'referrer'   => (string) $order->get_meta('_wc_order_attribution_referrer'),
+				);
+			}
+			return array('orders' => $out, 'hasMore' => count($orders) === 100);
 		},
 	));
 });

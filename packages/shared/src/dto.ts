@@ -36,6 +36,12 @@ export interface KeywordDto {
   score: number;
   status: KeywordStatus;
   seedTerm: string | null;
+  volume: number | null;
+  difficulty: number | null;
+  cpc: number | null;
+  gscImpressions: number | null;
+  gscClicks: number | null;
+  gscPosition: number | null;
   createdAt: string;
 }
 
@@ -48,6 +54,10 @@ export interface ArticleSummaryDto {
   status: ArticleStatus;
   wordCount: number;
   remoteUrl: string | null;
+  /** Estado del post en WordPress (draft, publish…) según la última sincronización. */
+  remoteStatus: string | null;
+  /** Fecha en que se detectó que pierde clics en Google; null si no. */
+  decayDetectedAt: string | null;
   publishedAt: string | null;
   updatedAt: string;
   createdAt: string;
@@ -215,4 +225,70 @@ export interface BillingDto {
 /** url = página de Stripe a la que redirigir; null si el cambio de plan se aplicó directamente. */
 export interface CheckoutResultDto {
   url: string | null;
+}
+
+/** Search Console de un sitio. Nunca incluye tokens. */
+export interface SearchConsoleStatusDto {
+  /** El servidor tiene cliente OAuth de Google configurado. */
+  configured: boolean;
+  connected: boolean;
+  googleEmail: string | null;
+  propertyUrl: string | null;
+  lastSyncAt: string | null;
+  /** Código de error de la última sincronización (GOOGLE_AUTH_FAILED…). */
+  lastError: string | null;
+}
+
+export interface SearchConsolePropertyDto {
+  siteUrl: string;
+  permissionLevel: string;
+}
+
+export interface ArticlePerformanceDto {
+  articleId: string;
+  title: string;
+  remoteUrl: string | null;
+  remoteStatus: string | null;
+  clicks: number;
+  impressions: number;
+  /** Posición media ponderada por impresiones; null sin impresiones. */
+  position: number | null;
+  previousClicks: number;
+  revenue: number;
+  orders: number;
+  decaying: boolean;
+}
+
+export interface OpportunityDto {
+  keywordId: string;
+  term: string;
+  impressions: number;
+  clicks: number;
+  position: number | null;
+  score: number;
+  status: string;
+}
+
+/** Rendimiento real en Google y ventas atribuidas (página /sites/:id/performance). */
+export interface PerformanceDto {
+  searchConsole: SearchConsoleStatusDto;
+  /** Ventana de 28 días que termina en el último día con datos. null si aún no hay datos. */
+  period: { from: string; to: string } | null;
+  totals: {
+    clicks: number;
+    impressions: number;
+    ctr: number;
+    position: number | null;
+    previousClicks: number;
+    previousImpressions: number;
+    revenue: number;
+    orders: number;
+    currency: string | null;
+  };
+  /** Últimos 90 días, un punto por día con datos. */
+  daily: { date: string; clicks: number; impressions: number }[];
+  articles: ArticlePerformanceDto[];
+  opportunities: OpportunityDto[];
+  /** El plan incluye ventas atribuidas. */
+  revenueEnabled: boolean;
 }

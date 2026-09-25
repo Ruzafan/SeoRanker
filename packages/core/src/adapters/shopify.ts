@@ -1,6 +1,8 @@
 import { NotImplementedError } from '../errors.js';
 import type {
+  AttributedOrder,
   ConnectionResult,
+  PostInfo,
   ContentItem,
   ContentSample,
   CreatePostInput,
@@ -26,5 +28,14 @@ export class ShopifyAdapter implements PublishingAdapter {
   }
   updatePost(_id: number, _input: Partial<CreatePostInput>): Promise<void> {
     throw new NotImplementedError('ShopifyAdapter.updatePost');
+  }
+  getPostsInfo(_ids: number[]): Promise<PostInfo[]> {
+    throw new NotImplementedError('ShopifyAdapter.getPostsInfo');
+  }
+  listAttributedOrders(
+    _after: Date,
+    _page: number,
+  ): Promise<{ orders: AttributedOrder[]; hasMore: boolean } | null> {
+    throw new NotImplementedError('ShopifyAdapter.listAttributedOrders');
   }
 }

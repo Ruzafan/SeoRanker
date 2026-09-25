@@ -12,6 +12,7 @@ import { JobsPage } from './pages/jobs';
 import { KeywordsPage } from './pages/keywords';
 import { LandingPage } from './pages/landing';
 import { LoginPage } from './pages/login';
+import { PerformancePage } from './pages/performance';
 import { SettingsPage } from './pages/settings';
 import { HomeRedirect, NewSitePage, SitesPage } from './pages/sites';
 import { ApiError } from './lib/api';
@@ -58,6 +59,7 @@ export function App() {
         }
       >
         <Route index element={<DashboardPage />} />
+        <Route path="performance" element={<PerformancePage />} />
         <Route path="keywords" element={<KeywordsPage />} />
         <Route path="articles" element={<ArticlesPage />} />
         <Route path="articles/:articleId" element={<ArticleEditorPage />} />

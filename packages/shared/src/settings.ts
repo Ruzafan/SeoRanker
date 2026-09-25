@@ -7,7 +7,7 @@ export const SEO_PLUGINS = ['yoast', 'rankmath'] as const;
 export type SeoPlugin = (typeof SEO_PLUGINS)[number];
 
 /** Versión del plugin de WordPress que distribuye el panel (apps/wp-plugin). */
-export const CONNECTOR_VERSION = '1.0.0';
+export const CONNECTOR_VERSION = '1.1.0';
 
 /** true si la versión `a` (x.y.z) es anterior a `b`. Lo no numérico cuenta como 0. */
 export function isOlderVersion(a: string, b: string): boolean {
@@ -38,6 +38,8 @@ export const siteSettingsSchema = z.object({
   lastDiscoverAt: z.string().nullable(),
   /** Alta guiada: 'pending' hasta que el primer discover lanza el primer artículo. */
   onboarding: z.enum(['pending', 'done']).nullable(),
+  /** Cursor de la sincronización de pedidos de WooCommerce (ISO). */
+  ordersSyncedAt: z.string().nullable(),
 });
 
 export type SiteSettings = z.infer<typeof siteSettingsSchema>;
@@ -55,6 +57,7 @@ export const DEFAULT_SETTINGS: SiteSettings = {
   woocommerce: null,
   lastDiscoverAt: null,
   onboarding: null,
+  ordersSyncedAt: null,
 };
 
 /** Campos que puede editar el usuario (el resto los gestiona el sistema). */

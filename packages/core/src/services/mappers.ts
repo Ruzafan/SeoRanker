@@ -38,6 +38,12 @@ export function toKeywordDto(k: Keyword): KeywordDto {
     score: k.score,
     status: k.status as KeywordStatus,
     seedTerm: k.seedTerm,
+    volume: k.volume,
+    difficulty: k.difficulty,
+    cpc: k.cpc,
+    gscImpressions: k.gscImpressions,
+    gscClicks: k.gscClicks,
+    gscPosition: k.gscPosition,
     createdAt: k.createdAt.toISOString(),
   };
 }
@@ -52,6 +58,8 @@ export function toArticleSummary(a: Article): ArticleSummaryDto {
     status: a.status as ArticleStatus,
     wordCount: a.wordCount,
     remoteUrl: a.remoteUrl,
+    remoteStatus: a.remoteStatus,
+    decayDetectedAt: a.decayDetectedAt?.toISOString() ?? null,
     publishedAt: a.publishedAt?.toISOString() ?? null,
     updatedAt: a.updatedAt.toISOString(),
     createdAt: a.createdAt.toISOString(),

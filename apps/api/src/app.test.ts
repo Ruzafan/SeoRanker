@@ -4,7 +4,7 @@ import { pino } from 'pino';
 import request from 'supertest';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
-import type { Billing, EnqueueInput, JobDispatcher, PipelineJobType } from '@seo/core';
+import type { Billing, CoreDeps, EnqueueInput, JobDispatcher, PipelineJobType } from '@seo/core';
 import { createStripeBilling } from '@seo/core';
 import { resetDatabase, setupTestDatabase } from '@seo/db/testing';
 import type { PrismaClient } from '@seo/db';
@@ -137,7 +137,11 @@ describe.skipIf(!db)('API (integración con Postgres)', () => {
   let freeLimit = 10;
   let allowPrivate = true;
 
-  async function makeApp(overrides: Partial<AppEnv> = {}, billing?: Billing) {
+  async function makeApp(
+    overrides: Partial<AppEnv> = {},
+    billing?: Billing,
+    coreExtra: Partial<CoreDeps> = {},
+  ) {
     dispatcher = new FakeDispatcher(prisma);
     app = await buildApp({
       env: { ...baseEnv, ...overrides },
@@ -148,6 +152,7 @@ describe.skipIf(!db)('API (integración con Postgres)', () => {
         encryptionKey: randomBytes(32),
         config: { allowPrivateHosts: allowPrivate, freePlanMaxArticles: freeLimit },
         billing,
+        ...coreExtra,
       },
     });
     await app.ready();
@@ -631,6 +636,13 @@ describe.skipIf(!db)('API (integración con Postgres)', () => {
         ['get', `/api/v1/sites/${site.id}/jobs`],
         ['get', `/api/v1/sites/${site.id}/usage`],
         ['get', `/api/v1/sites/${site.id}/stats`],
+        ['get', `/api/v1/sites/${site.id}/search-console`],
+        ['post', `/api/v1/sites/${site.id}/search-console/connect`],
+        ['get', `/api/v1/sites/${site.id}/search-console/properties`],
+        ['patch', `/api/v1/sites/${site.id}/search-console`, { propertyUrl: 'sc-domain:x.es' }],
+        ['delete', `/api/v1/sites/${site.id}/search-console`],
+        ['post', `/api/v1/sites/${site.id}/sync`],
+        ['get', `/api/v1/sites/${site.id}/performance`],
       ];
       for (const [method, path, body] of attempts) {
         const res = await (b as unknown as Record<string, (p: string) => request.Test>)[method]!(
@@ -742,6 +754,133 @@ describe.skipIf(!db)('API (integración con Postgres)', () => {
         status: 'active',
         usage: { articlesLimit: 400, maxSites: 25 },
       });
+    });
+  });
+
+  describe('Search Console (OAuth)', () => {
+    const google = {
+      clientId: 'cid',
+      clientSecret: 'cs',
+      redirectUri: 'http://localhost:8080/api/v1/integrations/google/callback',
+    };
+    const idToken = `x.${Buffer.from(JSON.stringify({ email: 'duena@gmail.com' })).toString('base64url')}.y`;
+    const fetchFn = (async (u: string | URL | Request) => {
+      const url = String(u);
+      if (url.includes('/token'))
+        return new Response(
+          JSON.stringify({ access_token: 'at', refresh_token: 'rt-secreto', id_token: idToken }),
+        );
+      if (url.endsWith('/webmasters/v3/sites'))
+        return new Response(
+          JSON.stringify({
+            siteEntry: [
+              { siteUrl: 'sc-domain:tienda.es', permissionLevel: 'siteOwner' },
+              { siteUrl: 'https://otra.com/', permissionLevel: 'siteFullUser' },
+            ],
+          }),
+        );
+      return new Response('{}', { status: 404 });
+    }) as typeof fetch;
+
+    it('sin Google configurado: el estado lo indica y conectar da GOOGLE_NOT_CONFIGURED', async () => {
+      const a = await signup('a@test.com');
+      const { body: site } = await a.post('/api/v1/sites').send(siteBody);
+      expect((await a.get(`/api/v1/sites/${site.id}/search-console`)).body).toMatchObject({
+        configured: false,
+        connected: false,
+      });
+      const res = await a.post(`/api/v1/sites/${site.id}/search-console/connect`);
+      expect(res.body.error.code).toBe('GOOGLE_NOT_CONFIGURED');
+      expect((await a.get(`/api/v1/sites/${site.id}/performance`)).body).toMatchObject({
+        period: null,
+        articles: [],
+        revenueEnabled: false,
+      });
+    });
+
+    it('conecta: state válido, token cifrado, propiedad elegida y sync encolado', async () => {
+      await app.close();
+      await makeApp({}, undefined, {
+        config: { allowPrivateHosts: true, freePlanMaxArticles: 3, google },
+        fetchFn,
+      });
+      const a = await signup('a@test.com');
+      const { body: site } = await a.post('/api/v1/sites').send(siteBody);
+      dispatcher.calls.length = 0;
+
+      const { body } = await a.post(`/api/v1/sites/${site.id}/search-console/connect`);
+      const auth = new URL(body.url);
+      expect(auth.host).toBe('accounts.google.com');
+      expect(auth.searchParams.get('access_type')).toBe('offline');
+      expect(auth.searchParams.get('scope')).toContain('webmasters.readonly');
+      const state = auth.searchParams.get('state')!;
+
+      // Otra cuenta no puede usar ese state.
+      const b = await signup('b@test.com');
+      const foreign = await b.get(
+        `/api/v1/integrations/google/callback?code=c&state=${encodeURIComponent(state)}`,
+      );
+      expect(foreign.status).toBe(302);
+      expect(foreign.headers['location']).toBe(
+        'http://localhost:8080/app?gsc=error&code=VALIDATION_ERROR',
+      );
+      // Manipulado → error; sin sesión → login.
+      const parts = state.split('.');
+      const ct = parts[3]!;
+      parts[3] = (ct[0] === 'A' ? 'B' : 'A') + ct.slice(1);
+      const tampered = parts.join('.');
+      expect(
+        (
+          await a.get(
+            `/api/v1/integrations/google/callback?code=c&state=${encodeURIComponent(tampered)}`,
+          )
+        ).headers['location'],
+      ).toContain('gsc=error');
+      expect(
+        (
+          await request(app.server).get(
+            `/api/v1/integrations/google/callback?code=c&state=${encodeURIComponent(state)}`,
+          )
+        ).headers['location'],
+      ).toBe('http://localhost:8080/login');
+
+      const ok = await a.get(
+        `/api/v1/integrations/google/callback?code=c&state=${encodeURIComponent(state)}`,
+      );
+      expect(ok.headers['location']).toBe(
+        `http://localhost:8080/sites/${site.id}/performance?gsc=connected`,
+      );
+      const conn = await prisma.searchConsoleConnection.findUniqueOrThrow({
+        where: { siteId: site.id },
+      });
+      expect(conn).toMatchObject({
+        googleEmail: 'duena@gmail.com',
+        propertyUrl: 'sc-domain:tienda.es',
+      });
+      expect(conn.credentials).not.toContain('rt-secreto');
+      expect(dispatcher.calls.map((c) => c.type)).toEqual(['sync']);
+
+      const status = await a.get(`/api/v1/sites/${site.id}/search-console`);
+      expect(status.body).toMatchObject({
+        configured: true,
+        connected: true,
+        propertyUrl: 'sc-domain:tienda.es',
+      });
+      expect(JSON.stringify(status.body)).not.toContain('rt-secreto');
+      expect((await a.get(`/api/v1/sites/${site.id}/search-console/properties`)).body).toHaveLength(
+        2,
+      );
+      const bad = await a
+        .patch(`/api/v1/sites/${site.id}/search-console`)
+        .send({ propertyUrl: 'https://ajena.com/' });
+      expect(bad.status).toBe(400);
+      const sel = await a
+        .patch(`/api/v1/sites/${site.id}/search-console`)
+        .send({ propertyUrl: 'https://otra.com/' });
+      expect(sel.body.propertyUrl).toBe('https://otra.com/');
+
+      expect((await a.delete(`/api/v1/sites/${site.id}/search-console`)).status).toBe(204);
+      expect(await prisma.searchConsoleConnection.count()).toBe(0);
     });
   });
 

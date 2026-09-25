@@ -78,10 +78,13 @@ export const batchKeywordsSchema = z.object({
 });
 export type BatchKeywordsInput = z.infer<typeof batchKeywordsSchema>;
 
+export const KEYWORD_SOURCES = ['manual', 'autocomplete', 'paa', 'gsc', 'import'] as const;
+
 export const keywordQuerySchema = z.object({
   status: z.enum(KEYWORD_STATUSES).optional(),
+  source: z.enum(KEYWORD_SOURCES).optional(),
   search: z.string().trim().max(200).optional(),
-  sort: z.enum(['score', 'createdAt', 'term']).default('score'),
+  sort: z.enum(['score', 'createdAt', 'term', 'volume', 'gscImpressions']).default('score'),
   order: z.enum(['asc', 'desc']).default('desc'),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(25),
@@ -128,6 +131,7 @@ export const JOB_TYPES = [
   'write',
   'publish',
   'brand-voice',
+  'sync',
   'watchdog',
   'schedule',
 ] as const;
@@ -142,3 +146,13 @@ export type PageQuery = z.infer<typeof pageQuerySchema>;
 // ---- Facturación -----------------------------------------------------------
 export const checkoutSchema = z.object({ plan: z.enum(PAID_PLAN_IDS) });
 export type CheckoutInput = z.infer<typeof checkoutSchema>;
+
+// ---- Search Console --------------------------------------------------------
+export const selectPropertySchema = z.object({ propertyUrl: z.string().trim().min(3).max(300) });
+export type SelectPropertyInput = z.infer<typeof selectPropertySchema>;
+
+export const googleCallbackSchema = z.object({
+  state: z.string().min(10).max(2000),
+  code: z.string().min(1).max(2000).optional(),
+  error: z.string().max(200).optional(),
+});

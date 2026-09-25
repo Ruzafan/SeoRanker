@@ -147,6 +147,23 @@ Idempotentes, con `JobRun` al empezar y al acabar (duración, tokens, error), 3 
 
 Generar a mano (botón _Generar artículo_) se detiene en `ready` para que lo revises. La **cadencia automática** (Ajustes) genera cada día/semana la mejor keyword pendiente y la envía a WordPress (como borrador salvo que actives la publicación automática).
 
+## Rendimiento: Search Console y ventas
+
+La página _Rendimiento_ de cada tienda muestra clics, impresiones y posición reales de los artículos, cuáles pierden tráfico y las **oportunidades** (búsquedas por las que la tienda ya aparece entre las posiciones 8 y 20). Lo alimenta el trabajo `sync`, que el worker encola una vez al día por tienda (y el botón _Sincronizar_):
+
+- **Posts**: relee de WordPress el estado y la URL definitiva de cada artículo enviado (un borrador pasa de `?p=ID` a su enlace al publicarse).
+- **Search Console**: métricas diarias por artículo (90 días la primera vez, después se relee la última semana porque Google corrige datos), oportunidades como keywords con origen `gsc` (sin las de marca ni las que ya posiciona un artículo propio, que serían canibalización) y **caída**: un artículo que pierde más del 30 % de clics frente a los 28 días anteriores queda marcado para refrescar.
+- **Ventas** (planes Pro y Agency, WooCommerce 8.5+ y conector ≥ 1.1): pedidos cuya sesión **empezó** en un artículo, según la atribución nativa de WooCommerce. No se añaden UTM a los enlaces internos (pisarían la fuente real de la visita).
+
+Configurar Google (una vez por servidor):
+
+1. Google Cloud → _APIs y servicios_ → habilita **Google Search Console API**.
+2. _Pantalla de consentimiento OAuth_: tipo externo, scopes `openid`, `email` y `.../auth/webmasters.readonly` (solo lectura). Mientras esté en modo _Testing_, añade como usuarios de prueba las cuentas que vayan a conectar; para abrirlo a clientes hay que pasar la verificación de Google.
+3. _Credenciales_ → ID de cliente OAuth de tipo **Aplicación web**, con URI de redirección `https://<tu-dominio>/api/v1/integrations/google/callback`.
+4. `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET` en la api **y** el worker (el worker refresca los tokens).
+
+El refresh token se guarda cifrado con `ENCRYPTION_KEY`, como las credenciales de WordPress, y nunca sale en respuestas ni logs. Desconectar revoca el token en Google y borra las métricas importadas.
+
 ## Planes, cuotas y Stripe
 
 Planes en `packages/shared/src/plans.ts` (fuente única para api, panel y landing): **Free** (1 tienda, `FREE_PLAN_MAX_ARTICLES` artículos/mes, por defecto 3), **Starter** 19 € (1 tienda, 20/mes), **Pro** 49 € (5 tiendas, 100/mes) y **Agency** 149 € (25 tiendas, 400/mes, marca blanca). El tope de artículos es **por organización** (suma de todas sus tiendas); lo aplica `assertQuota` (`packages/core/src/pipeline/quota.ts`).

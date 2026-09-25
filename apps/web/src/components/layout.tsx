@@ -4,6 +4,7 @@ import {
   FileText,
   Gauge,
   KeyRound,
+  LineChart,
   ListChecks,
   LogOut,
   Mic2,
@@ -25,6 +26,7 @@ interface NavItem {
 
 const siteNav: NavItem[] = [
   { to: '', label: 'Panel', icon: Gauge, end: true },
+  { to: 'performance', label: 'Rendimiento', icon: LineChart },
   { to: 'keywords', label: 'Keywords', icon: KeyRound },
   { to: 'articles', label: 'Artículos', icon: FileText },
   { to: 'voice', label: 'Voz de marca', icon: Mic2 },
@@ -140,7 +142,7 @@ export function SiteLayout() {
         <main className="min-w-0 flex-1 pb-20 md:pb-0">{isLoading ? <Spinner /> : <Outlet />}</main>
       </div>
       <nav
-        className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-6 border-t border-stone-200 bg-white/95 backdrop-blur dark:border-stone-800 dark:bg-stone-950/95 md:hidden"
+        className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-7 border-t border-stone-200 bg-white/95 backdrop-blur dark:border-stone-800 dark:bg-stone-950/95 md:hidden"
         aria-label="Secciones del sitio"
       >
         {siteNav.map((i) => (

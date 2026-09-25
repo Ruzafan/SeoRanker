@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@seo/db';
 import type { PublishingAdapter } from '../adapters/index.js';
 import type { ClaudeClient } from '../ai/claude.js';
+import type { GoogleConfig } from '../integrations/google.js';
 import type { JobDispatcher } from '../queue.js';
 
 export interface Logger {
@@ -15,6 +16,8 @@ export interface PipelineConfig {
   /** Tope mensual de artículos del plan free. */
   freePlanMaxArticles: number;
   allowPrivateHosts: boolean;
+  /** OAuth de Google (Search Console); sin él, `sync` se salta Search Console. */
+  google?: GoogleConfig | undefined;
 }
 
 export interface PipelineContext {
