@@ -114,6 +114,7 @@ export const jobTypeLabel: Record<JobType, string> = {
   cluster: 'Agrupar en clusters',
   backlink: 'Enlazado inverso',
   refresh: 'Refresco de contenido',
+  'ai-visibility': 'Visibilidad en IA',
   watchdog: 'Vigilante',
   schedule: 'Programación',
 };

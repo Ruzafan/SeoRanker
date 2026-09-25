@@ -81,6 +81,7 @@ model Site {
   searchConsole SearchConsoleConnection?
   clusters      KeywordCluster[]
   internalLinks InternalLink[]
+  aiChecks      AiVisibilityCheck[]
   metrics       ArticleMetric[]
   conversions   ArticleConversion[]
 
@@ -286,4 +287,24 @@ model UsageRecord {
   costCents    Int    @default(0)
 
   @@unique([siteId, period])
+}
+
+/// Visibilidad en asistentes de IA: una pregunta de comprador hecha a Claude con búsqueda web.
+model AiVisibilityCheck {
+  id          String   @id @default(cuid())
+  siteId      String
+  site        Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  /// Agrupa las preguntas de una misma ejecución (JobRun id).
+  runId       String
+  prompt      String
+  /// La respuesta menciona la marca o el dominio.
+  mentioned   Boolean
+  /// La respuesta cita una página del sitio como fuente.
+  cited       Boolean
+  /// Dominios citados en la respuesta (competencia en IA), sin el propio.
+  competitors String[]
+  answer      String   @db.Text
+  createdAt   DateTime @default(now())
+
+  @@index([siteId, createdAt])
 }

@@ -656,6 +656,8 @@ describe.skipIf(!db)('API (integración con Postgres)', () => {
         ['delete', `/api/v1/sites/${site.id}/search-console`],
         ['post', `/api/v1/sites/${site.id}/sync`],
         ['get', `/api/v1/sites/${site.id}/performance`],
+        ['get', `/api/v1/sites/${site.id}/ai-visibility`],
+        ['post', `/api/v1/sites/${site.id}/ai-visibility/run`],
       ];
       for (const [method, path, body] of attempts) {
         const res = await (b as unknown as Record<string, (p: string) => request.Test>)[method]!(

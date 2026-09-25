@@ -138,6 +138,7 @@ export const JOB_TYPES = [
   'cluster',
   'backlink',
   'refresh',
+  'ai-visibility',
   'watchdog',
   'schedule',
 ] as const;

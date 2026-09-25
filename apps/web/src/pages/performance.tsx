@@ -11,6 +11,7 @@ import { useEffect } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import type { PerformanceDto, SearchConsoleStatusDto } from '@seo/shared';
+import { AiVisibilityCard } from '../components/ai-visibility-card';
 import { LineChart, SERIES_TONES } from '../components/charts';
 import {
   Badge,
@@ -94,6 +95,7 @@ export function PerformancePage() {
       />
       <SearchConsoleCard siteId={siteId} status={data.searchConsole} />
       {data.searchConsole.connected && <Results siteId={siteId} data={data} />}
+      <AiVisibilityCard siteId={siteId} />
     </>
   );
 }

@@ -396,3 +396,15 @@ export interface MonthlyReportDto {
   opportunities: { term: string; impressions: number; position: number | null }[];
   refreshed: number;
 }
+
+/** Visibilidad en asistentes de IA (planes con aiVisibility). */
+export interface AiVisibilityDto {
+  enabled: boolean;
+  lastRunAt: string | null;
+  /** Proporción de preguntas de la última ejecución cuya respuesta nombra la tienda (0-1). */
+  mentionRate: number | null;
+  checks: { prompt: string; mentioned: boolean; cited: boolean; competitors: string[] }[];
+  history: { date: string; mentionRate: number }[];
+  /** Dominios que más citan los asistentes en las últimas ejecuciones. */
+  topCompetitors: { domain: string; count: number }[];
+}

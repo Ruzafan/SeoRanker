@@ -1,4 +1,4 @@
-import { parseSettings, type Cadence } from '@seo/shared';
+import { PLAN_IDS, PLANS, parseSettings, type Cadence } from '@seo/shared';
 import { errorCode } from '../errors.js';
 import type { PipelineContext } from './context.js';
 import { assertQuota } from './quota.js';
@@ -176,6 +176,7 @@ async function mark(
 }
 
 const SYNC_EVERY_MS = 20 * HOUR;
+const AI_VISIBILITY_EVERY_MS = 7 * 24 * HOUR - 2 * HOUR;
 
 /**
  * Encola `sync` (posts, Search Console, pedidos) una vez al día por sitio activo que tenga algo que
@@ -210,5 +211,37 @@ export async function runSyncScheduler(
       ctx.log.warn({ siteId: site.id, reason: errorCode(err) }, 'sync scheduler skipped site');
     }
   }
+  enqueued += await scheduleAiVisibility(ctx, now);
   return { enqueued };
+}
+
+/** Visibilidad en IA: una ejecución semanal por sitio activo con plan que la incluya y keywords. */
+async function scheduleAiVisibility(ctx: PipelineContext, now: Date): Promise<number> {
+  const sites = await ctx.prisma.site.findMany({
+    where: {
+      active: true,
+      organization: { plan: { in: PLAN_IDS.filter((p) => PLANS[p].aiVisibility) } },
+      keywords: { some: {} },
+    },
+    select: { id: true },
+  });
+  let enqueued = 0;
+  for (const site of sites) {
+    const last = await ctx.prisma.jobRun.findFirst({
+      where: { siteId: site.id, type: 'ai-visibility' },
+      orderBy: { createdAt: 'desc' },
+      select: { createdAt: true },
+    });
+    if (last && now.getTime() - last.createdAt.getTime() < AI_VISIBILITY_EVERY_MS) continue;
+    try {
+      await ctx.dispatcher.enqueue('ai-visibility', { siteId: site.id });
+      enqueued++;
+    } catch (err) {
+      ctx.log.warn(
+        { siteId: site.id, reason: errorCode(err) },
+        'ai visibility scheduler skipped site',
+      );
+    }
+  }
+  return enqueued;
 }

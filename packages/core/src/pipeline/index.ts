@@ -8,6 +8,7 @@ import { runSync } from './sync.js';
 import { runCluster } from './cluster.js';
 import { runBacklink } from './backlink.js';
 import { runRefresh } from './refresh.js';
+import { runAiVisibility } from './ai-visibility.js';
 import { runWrite } from './write.js';
 
 export * from './context.js';
@@ -29,6 +30,7 @@ const RUNNERS: Record<PipelineJobType, (ctx: PipelineContext, info: RunInfo) => 
   cluster: runCluster,
   backlink: runBacklink,
   refresh: runRefresh,
+  'ai-visibility': runAiVisibility,
 };
 
 export function runPipelineJob(

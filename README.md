@@ -194,6 +194,12 @@ Configurar Google (una vez por servidor):
 
 El refresh token se guarda cifrado con `ENCRYPTION_KEY`, como las credenciales de WordPress, y nunca sale en respuestas ni logs. Desconectar revoca el token en Google y borra las métricas importadas.
 
+## Visibilidad en asistentes de IA (GEO)
+
+Trabajo `ai-visibility` (Pro y Agency, semanal y con _Comprobar ahora_ en Rendimiento): con las mejores keywords (comerciales primero) formula hasta 5 preguntas de comprador («¿Dónde puedo comprar…?») y se las hace a Claude con la herramienta de **búsqueda web** del servidor, sin mencionar la tienda. Registra si la respuesta nombra la tienda, si cita alguna de sus páginas y qué dominios cita en su lugar.
+
+Usa a propósito la variante básica `web_search_20250305`: medido con la API real, la de filtrado dinámico (`20260209`) consumía ~83 k tokens y 65 s por pregunta y no devolvía citas; la básica, ~14 k tokens, 11 s y citas explícitas. Coste aproximado: 0,05 $ por pregunta (tokens + 0,01 $ por búsqueda), ~1 $/mes por tienda; cuenta en el coste pero no como artículo.
+
 ## Planes, cuotas y Stripe
 
 Planes en `packages/shared/src/plans.ts` (fuente única para api, panel y landing): **Free** (1 tienda, `FREE_PLAN_MAX_ARTICLES` artículos/mes, por defecto 3), **Starter** 19 € (1 tienda, 20/mes), **Pro** 49 € (5 tiendas, 100/mes) y **Agency** 149 € (25 tiendas, 400/mes, marca blanca). El tope de artículos es **por organización** (suma de todas sus tiendas); lo aplica `assertQuota` (`packages/core/src/pipeline/quota.ts`).

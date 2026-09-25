@@ -31,6 +31,7 @@ const PIPELINE_TYPES: PipelineJobType[] = [
   'cluster',
   'backlink',
   'refresh',
+  'ai-visibility',
 ];
 const WATCHDOG_EVERY_MS = 10 * 60_000;
 const SCHEDULER_EVERY_MS = 15 * 60_000;

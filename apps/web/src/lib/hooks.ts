@@ -5,6 +5,7 @@ import type {
   ArticleDto,
   ArticleSummaryDto,
   BatchResultDto,
+  AiVisibilityDto,
   BillingDto,
   BrandingDto,
   BrandingInput,
@@ -303,6 +304,14 @@ export const usePerformance = (siteId: string) =>
     queryKey: ['site', siteId, 'performance'],
     queryFn: () => api.get<PerformanceDto>(`/sites/${siteId}/performance`),
   });
+
+export const useAiVisibility = (siteId: string) =>
+  useQuery({
+    queryKey: ['site', siteId, 'ai-visibility'],
+    queryFn: () => api.get<AiVisibilityDto>(`/sites/${siteId}/ai-visibility`),
+  });
+export const useRunAiVisibility = (siteId: string) =>
+  useSiteMutation(siteId, () => api.post<EnqueuedDto>(`/sites/${siteId}/ai-visibility/run`));
 
 export const useConnectSearchConsole = (siteId: string) =>
   useMutation({

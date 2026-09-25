@@ -12,19 +12,12 @@ export const QUEUE_NAMES = {
   cluster: 'cluster',
   backlink: 'backlink',
   refresh: 'refresh',
+  'ai-visibility': 'ai-visibility',
   maintenance: 'maintenance',
 } as const;
 
-export type PipelineJobType =
-  | 'brand-voice'
-  | 'discover'
-  | 'outline'
-  | 'write'
-  | 'publish'
-  | 'sync'
-  | 'cluster'
-  | 'backlink'
-  | 'refresh';
+/** Una cola por tipo de trabajo del pipeline (todas salvo la de mantenimiento). */
+export type PipelineJobType = Exclude<keyof typeof QUEUE_NAMES, 'maintenance'>;
 
 export interface JobPayload {
   jobRunId: string;
@@ -81,6 +74,7 @@ export function createQueues(
     cluster: make(QUEUE_NAMES.cluster),
     backlink: make(QUEUE_NAMES.backlink),
     refresh: make(QUEUE_NAMES.refresh),
+    'ai-visibility': make(QUEUE_NAMES['ai-visibility']),
     maintenance: make(QUEUE_NAMES.maintenance),
   };
 }

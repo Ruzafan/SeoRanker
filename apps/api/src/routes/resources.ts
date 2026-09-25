@@ -19,6 +19,8 @@ import {
   restorePreviousVersion,
   reviewArticle,
   getPerformance,
+  getAiVisibility,
+  runAiVisibilityNow,
   getSearchConsoleStatus,
   listSearchConsoleProperties,
   listSiteAuthors,
@@ -280,6 +282,16 @@ export function resourceRoutes(deps: CoreDeps, auth: AuthHelpers) {
     app.post('/sites/:id/sync', async (req, reply) => {
       const { id } = idParam.parse(req.params);
       return reply.status(202).send(await syncSiteNow(deps, org(req), id));
+    });
+
+    app.get('/sites/:id/ai-visibility', async (req) => {
+      const { id } = idParam.parse(req.params);
+      return getAiVisibility(deps, org(req), id);
+    });
+
+    app.post('/sites/:id/ai-visibility/run', async (req, reply) => {
+      const { id } = idParam.parse(req.params);
+      return reply.status(202).send(await runAiVisibilityNow(deps, org(req), id));
     });
 
     app.get('/sites/:id/performance', async (req) => {
