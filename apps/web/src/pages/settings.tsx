@@ -354,7 +354,7 @@ export function SettingsPage() {
             del.mutate(undefined, {
               onSuccess: () => {
                 toast.success('Sitio eliminado');
-                navigate('/');
+                navigate('/app');
               },
             });
           }}

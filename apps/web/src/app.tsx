@@ -9,6 +9,7 @@ import { BrandVoicePage } from './pages/brand-voice';
 import { DashboardPage } from './pages/dashboard';
 import { JobsPage } from './pages/jobs';
 import { KeywordsPage } from './pages/keywords';
+import { LandingPage } from './pages/landing';
 import { LoginPage } from './pages/login';
 import { SettingsPage } from './pages/settings';
 import { HomeRedirect, NewSitePage, SitesPage } from './pages/sites';
@@ -32,6 +33,7 @@ function RequireAuth({ children }: { children: ReactNode }) {
 export function App() {
   return (
     <Routes>
+      <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route
         element={
@@ -40,7 +42,7 @@ export function App() {
           </RequireAuth>
         }
       >
-        <Route path="/" element={<HomeRedirect />} />
+        <Route path="/app" element={<HomeRedirect />} />
         <Route path="/sites" element={<SitesPage />} />
         <Route path="/sites/new" element={<NewSitePage />} />
         <Route path="/admin" element={<AdminPage />} />
