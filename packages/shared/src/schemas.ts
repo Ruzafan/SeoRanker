@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { PLATFORM_IDS } from './plans.js';
 import { editableSettingsSchema } from './settings.js';
 
 // ---- Auth ----------------------------------------------------------------
@@ -24,6 +25,8 @@ export const createSiteSchema = z.object({
   url: z.string().trim().min(3).max(300),
   language: langSchema,
   country: countrySchema,
+  /** Las no disponibles se rechazan en el servicio con PLATFORM_NOT_SUPPORTED. */
+  platform: z.enum(PLATFORM_IDS).default('wordpress'),
   wpUsername: z.string().trim().min(1).max(100),
   wpAppPassword: z.string().trim().min(8).max(200),
 });

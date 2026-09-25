@@ -25,6 +25,13 @@ export function createAdapter(
   site: { url: string; credentials: string; platform?: string },
   deps: AdapterDeps,
 ): PublishingAdapter {
+  // Nueva plataforma: implementa su adapter, añade su caso aquí y márcala available en PLATFORMS.
+  const platform = site.platform ?? 'wordpress';
+  if (platform !== 'wordpress') {
+    throw new AppError('PLATFORM_NOT_SUPPORTED', `No adapter for platform ${platform}`, {
+      httpStatus: 400,
+    });
+  }
   const creds = readCredentials(site.credentials, deps.encryptionKey);
   if (!creds)
     throw new AppError('NO_CREDENTIALS', 'Site has no usable credentials', { httpStatus: 400 });

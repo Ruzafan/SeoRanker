@@ -12,6 +12,7 @@ import {
   generateFromKeyword,
   getArticle,
   getSiteStats,
+  getSitesOverview,
   getUsage,
   listArticles,
   listJobs,
@@ -65,6 +66,7 @@ export function resourceRoutes(deps: CoreDeps, auth: AuthHelpers) {
 
     // ---- Sites ---------------------------------------------------------
     app.get('/sites', async (req) => (await listSites(deps, org(req))).map(toSiteDto));
+    app.get('/sites/overview', async (req) => getSitesOverview(deps, org(req)));
 
     app.post('/sites', async (req, reply) => {
       const site = await createSite(deps, org(req), createSiteSchema.parse(req.body));

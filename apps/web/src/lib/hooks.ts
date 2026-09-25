@@ -17,6 +17,7 @@ import type {
   PatchKeywordInput,
   RegisterInput,
   SiteDto,
+  SitesOverviewDto,
   SiteStatsDto,
   UpdateSiteInput,
   UsageDto,
@@ -76,6 +77,13 @@ export function useLogout() {
 export const useSites = () =>
   useQuery({ queryKey: ['sites'], queryFn: () => api.get<SiteDto[]>('/sites') });
 
+export const useSitesOverview = () =>
+  useQuery({
+    queryKey: ['sites-overview'],
+    queryFn: () => api.get<SitesOverviewDto>('/sites/overview'),
+    refetchInterval: 30_000,
+  });
+
 export const useSite = (siteId: string) =>
   useQuery({ queryKey: ['site', siteId], queryFn: () => api.get<SiteDto>(`/sites/${siteId}`) });
 
@@ -83,7 +91,10 @@ export function useCreateSite() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: CreateSiteInput) => api.post<SiteDto>('/sites', input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['sites'] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['sites'] });
+      void qc.invalidateQueries({ queryKey: ['sites-overview'] });
+    },
   });
 }
 

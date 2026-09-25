@@ -1,7 +1,9 @@
 import type { Site } from '@seo/db';
 import {
   DEFAULT_SETTINGS,
+  PLATFORMS,
   parseSettings,
+  planFor,
   type ConnectionTestDto,
   type CreateSiteInput,
   type EnqueuedDto,
@@ -23,6 +25,16 @@ export async function createSite(
   organizationId: string,
   input: CreateSiteInput,
 ): Promise<Site> {
+  if (!PLATFORMS[input.platform].available) {
+    throw new AppError(
+      'PLATFORM_NOT_SUPPORTED',
+      `Platform ${input.platform} is not available yet`,
+      {
+        httpStatus: 400,
+      },
+    );
+  }
+  await assertSiteLimit(deps, organizationId);
   const url = normalizeSiteUrl(input.url, { allowPrivate: deps.config.allowPrivateHosts });
   const credentials: SiteCredentials = {
     username: input.wpUsername,
@@ -33,12 +45,27 @@ export async function createSite(
       organizationId,
       name: input.name,
       url,
+      platform: input.platform,
       language: input.language,
       country: input.country,
       credentials: encryptJson(deps.encryptionKey, credentials),
       settings: DEFAULT_SETTINGS as never,
     },
   });
+}
+
+/** Lanza PLAN_SITE_LIMIT si el plan de la organización no admite otra tienda. */
+async function assertSiteLimit(deps: CoreDeps, organizationId: string): Promise<void> {
+  const org = await deps.prisma.organization.findUniqueOrThrow({
+    where: { id: organizationId },
+    select: { plan: true, _count: { select: { sites: true } } },
+  });
+  const max = planFor(org.plan).maxSites;
+  if (max !== null && org._count.sites >= max) {
+    throw new AppError('PLAN_SITE_LIMIT', `Plan ${org.plan} allows ${max} site(s)`, {
+      httpStatus: 402,
+    });
+  }
 }
 
 export async function updateSite(

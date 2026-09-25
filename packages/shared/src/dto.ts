@@ -112,6 +112,30 @@ export interface SiteStatsDto {
   recentJobs: JobRunDto[];
 }
 
+/** Resumen de todas las tiendas de la organización (página /sites). */
+export interface SitesOverviewDto {
+  plan: {
+    id: string;
+    name: string;
+    maxSites: number | null;
+    articlesPerMonth: number | null;
+  };
+  sitesCount: number;
+  sites: SiteOverviewItem[];
+}
+
+export interface SiteOverviewItem {
+  siteId: string;
+  publishedThisMonth: number;
+  pendingKeywords: number;
+  inProgress: number;
+  /** Artículos generados este mes (cuenta para la cuota). */
+  articlesThisMonth: number;
+  costCents: number;
+  /** Último trabajo fallido de las últimas 24 h; null si no hay. */
+  lastFailure: { type: string; error: string | null; at: string } | null;
+}
+
 export interface ConnectionTestDto {
   ok: boolean;
   /** Código (WP_AUTH_FAILED, CONNECTION_FAILED…) o "OK". Nunca texto localizado. */

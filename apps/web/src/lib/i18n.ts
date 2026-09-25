@@ -23,6 +23,9 @@ export const errorMessages: Record<ErrorCode | 'NETWORK_ERROR', string> = {
   NO_SEEDS:
     'No hay semillas ni contenido publicado del que deducirlas. Publica algo en la tienda o añade semillas en Ajustes.',
   INVALID_STATE: 'Esa acción no se puede hacer en el estado actual.',
+  PLAN_SITE_LIMIT:
+    'Tu plan no admite más tiendas. Cambia de plan para conectar otra o elimina una que no uses.',
+  PLATFORM_NOT_SUPPORTED: 'Esa plataforma todavía no está disponible. De momento, WordPress.',
   QUOTA_EXCEEDED: 'Has alcanzado el límite mensual de artículos de tu plan.',
   AI_ERROR: 'Falló la llamada a Claude. Suele ser temporal; reintenta en unos minutos.',
   AI_TRUNCATED:

@@ -495,14 +495,20 @@ describe.skipIf(!db)('pipeline (integración con Postgres)', () => {
         code: 'QUOTA_EXCEEDED',
       });
     });
-    it('otros planes no tienen tope', async () => {
+    it('pro tiene su propio tope; agency no tiene', async () => {
+      const cfg = { freePlanMaxArticles: 2 };
       await prisma.organization.update({ where: { id: orgId }, data: { plan: 'pro' } });
       await prisma.usageRecord.create({
-        data: { siteId, period: new Date().toISOString().slice(0, 7), articles: 999 },
+        data: { siteId, period: new Date().toISOString().slice(0, 7), articles: 99 },
       });
-      await expect(
-        assertQuota(prisma, siteId, 'generate_article', { freePlanMaxArticles: 2 }),
-      ).resolves.toBeUndefined();
+      await expect(assertQuota(prisma, siteId, 'generate_article', cfg)).resolves.toBeUndefined();
+      await prisma.usageRecord.updateMany({ where: { siteId }, data: { articles: 100 } });
+      await expect(assertQuota(prisma, siteId, 'generate_article', cfg)).rejects.toMatchObject({
+        code: 'QUOTA_EXCEEDED',
+      });
+      await prisma.organization.update({ where: { id: orgId }, data: { plan: 'agency' } });
+      await prisma.usageRecord.updateMany({ where: { siteId }, data: { articles: 999 } });
+      await expect(assertQuota(prisma, siteId, 'generate_article', cfg)).resolves.toBeUndefined();
     });
   });
 

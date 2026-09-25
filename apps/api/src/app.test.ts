@@ -460,6 +460,37 @@ describe.skipIf(!db)('API (integración con Postgres)', () => {
       );
     });
 
+    it('planes: free admite 1 tienda (PLAN_SITE_LIMIT); plataformas no disponibles se rechazan', async () => {
+      const { agent, site } = await setup();
+      const second = await agent.post('/api/v1/sites').send({ ...siteBody, name: 'Otra' });
+      expect(second.status).toBe(402);
+      expect(second.body.error.code).toBe('PLAN_SITE_LIMIT');
+
+      const org = await prisma.site.findUniqueOrThrow({ where: { id: site.id } });
+      await prisma.organization.update({
+        where: { id: org.organizationId },
+        data: { plan: 'agency' },
+      });
+      const shopify = await agent
+        .post('/api/v1/sites')
+        .send({ ...siteBody, name: 'Shop', platform: 'shopify' });
+      expect(shopify.status).toBe(400);
+      expect(shopify.body.error.code).toBe('PLATFORM_NOT_SUPPORTED');
+      const ok = await agent.post('/api/v1/sites').send({ ...siteBody, name: 'Otra' });
+      expect(ok.status).toBe(201);
+      expect(ok.body.platform).toBe('wordpress');
+
+      await agent.post(`/api/v1/sites/${site.id}/keywords`).send({ terms: ['aa aa', 'bb bb'] });
+      const overview = await agent.get('/api/v1/sites/overview');
+      expect(overview.body).toMatchObject({
+        plan: { id: 'agency', maxSites: null, articlesPerMonth: null },
+        sitesCount: 2,
+      });
+      expect(overview.body.sites).toContainEqual(
+        expect.objectContaining({ siteId: site.id, pendingKeywords: 2, lastFailure: null }),
+      );
+    });
+
     it('discover encola sin seeds (se deducen del contenido); analyze-voice encola', async () => {
       const { agent, site } = await setup();
       expect((await agent.post(`/api/v1/sites/${site.id}/keywords/discover`)).status).toBe(202);
@@ -593,6 +624,10 @@ describe.skipIf(!db)('API (integración con Postgres)', () => {
         expect(JSON.stringify(res.body)).not.toMatch(/privada|Secreto|Mi Tienda/);
       }
       expect((await b.get('/api/v1/sites')).body).toEqual([]);
+      expect((await b.get('/api/v1/sites/overview')).body).toMatchObject({
+        sitesCount: 0,
+        sites: [],
+      });
 
       // Y nada cambió en la organización propietaria.
       expect(await prisma.keyword.count()).toBe(1);
