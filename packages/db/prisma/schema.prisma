@@ -11,19 +11,49 @@ datasource db {
 model Organization {
   id        String   @id @default(cuid())
   name      String
-  plan      String   @default("free") // free | pro | agency — preparado, no usado aún
+  plan      String   @default("free") // free | starter | pro | agency (lo sincroniza Stripe)
   createdAt DateTime @default(now())
   users     User[]
   sites     Site[]
+
+  // Facturación (Stripe). El plan efectivo es `plan`; esto es el estado de la suscripción.
+  stripeCustomerId     String?   @unique
+  stripeSubscriptionId String?   @unique
+  subscriptionStatus   String? // active | trialing | past_due | canceled | unpaid | incomplete...
+  currentPeriodEnd     DateTime?
+  cancelAtPeriodEnd    Boolean   @default(false)
+
+  // Marca blanca (plan Agency): informes con el nombre, logo y color de la agencia.
+  brandName    String?
+  brandLogoUrl String?
+  brandColor   String?
+
+  invitations Invitation[]
 }
 
 model User {
   id             String       @id @default(cuid())
   email          String       @unique
   passwordHash   String
-  role           String       @default("owner") // owner | member
+  role           String       @default("owner") // owner | member | viewer (cliente: lee, comenta y aprueba)
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime     @default(now())
+  comments       ArticleComment[]
+
+  @@index([organizationId])
+}
+
+/// Invitación a unirse a una organización. Solo se guarda el hash del token del enlace.
+model Invitation {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email          String
+  role           String // member | viewer
+  tokenHash      String       @unique
+  expiresAt      DateTime
+  acceptedAt     DateTime?
   createdAt      DateTime     @default(now())
 
   @@index([organizationId])
@@ -44,10 +74,16 @@ model Site {
   active         Boolean      @default(true)
   createdAt      DateTime     @default(now())
 
-  keywords Keyword[]
-  articles Article[]
-  jobs     JobRun[]
-  usage    UsageRecord[]
+  keywords      Keyword[]
+  articles      Article[]
+  jobs          JobRun[]
+  usage         UsageRecord[]
+  searchConsole SearchConsoleConnection?
+  clusters      KeywordCluster[]
+  internalLinks InternalLink[]
+  aiChecks      AiVisibilityCheck[]
+  metrics       ArticleMetric[]
+  conversions   ArticleConversion[]
 
   @@index([organizationId])
 }
@@ -64,6 +100,22 @@ model Keyword {
   seedTerm  String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // Métricas de mercado (proveedor de keywords, p. ej. DataForSEO) y de Search Console.
+  volume         Int? // búsquedas/mes
+  difficulty     Int? // 0-100
+  cpc            Float? // EUR
+  gscImpressions Int? // últimos 28 días
+  gscClicks      Int?
+  gscPosition    Float?
+
+  clusterId String?
+  cluster   KeywordCluster? @relation(fields: [clusterId], references: [id], onDelete: SetNull)
+  /// Motivo del descarte automático (CANNIBALIZATION) y artículo con el que choca.
+  discardReason      String?
+  similarToArticleId String?
+  /// El usuario la recuperó tras un descarte automático: no se vuelve a descartar por similitud.
+  allowSimilar       Boolean @default(false)
 
   articles Article[]
 
@@ -82,10 +134,23 @@ model Article {
   slug            String
   metaDescription String?
   outline         Json?
+  /// Top de Google para la keyword al planificar (títulos, H2 de la competencia, preguntas).
+  serp            Json?
   contentHtml     String?   @db.Text
+  /// Imagen destacada (ID de medio de WordPress, p. ej. la foto del producto recomendado).
+  featuredMediaId Int?
   status          String    @default("draft") // draft | writing | ready | publishing | published | failed
   remotePostId    Int? // ID del post en WordPress
   remoteUrl       String?
+  remoteStatus    String? // estado del post en WordPress (draft | publish | future…), lo sincroniza `sync`
+  decayDetectedAt DateTime? // pierde clics en Search Console: candidato a refrescar
+  /// Refresco: fecha y versión anterior del contenido (para poder deshacerlo).
+  refreshedAt         DateTime?
+  previousContentHtml String?   @db.Text
+  /// Publicación programada: el planificador lo publica en WordPress al llegar la fecha.
+  scheduledFor        DateTime?
+  /// Aprobación del cliente: none | pending | approved | changes_requested
+  reviewStatus        String    @default("none")
   wordCount       Int       @default(0)
   publishedAt     DateTime?
   createdAt       DateTime  @default(now())
@@ -93,6 +158,105 @@ model Article {
 
   @@index([siteId, status])
   @@index([status, updatedAt]) // watchdog de zombis
+
+  metrics     ArticleMetric[]
+  conversions ArticleConversion[]
+  linksOut    InternalLink[] @relation("linkFrom")
+  linksIn     InternalLink[] @relation("linkTo")
+  comments    ArticleComment[]
+
+  @@index([status, scheduledFor]) // publicación programada
+}
+
+/// Comentario de revisión sobre un artículo (equipo o cliente).
+model ArticleComment {
+  id        String   @id @default(cuid())
+  siteId    String
+  articleId String
+  article   Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  /// approve | request_changes | comment
+  kind      String   @default("comment")
+  body      String   @db.Text
+  createdAt DateTime @default(now())
+
+  @@index([articleId, createdAt])
+}
+
+/// Grupo temático de keywords con una página pilar (la más amplia) y sus satélites.
+model KeywordCluster {
+  id              String    @id @default(cuid())
+  siteId          String
+  site            Site      @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  name            String
+  pillarKeywordId String?
+  createdAt       DateTime  @default(now())
+  keywords        Keyword[]
+
+  @@index([siteId])
+}
+
+/// Enlace interno añadido a posteriori en un artículo antiguo hacia uno nuevo (enlazado inverso).
+model InternalLink {
+  id            String   @id @default(cuid())
+  siteId        String
+  site          Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  fromArticleId String
+  fromArticle   Article  @relation("linkFrom", fields: [fromArticleId], references: [id], onDelete: Cascade)
+  toArticleId   String
+  toArticle     Article  @relation("linkTo", fields: [toArticleId], references: [id], onDelete: Cascade)
+  anchor        String
+  createdAt     DateTime @default(now())
+
+  @@unique([fromArticleId, toArticleId])
+  @@index([siteId])
+}
+
+/// Search Console de un sitio. El refresh token va cifrado (AES-256-GCM), como las credenciales de WP.
+model SearchConsoleConnection {
+  id          String    @id @default(cuid())
+  siteId      String    @unique
+  site        Site      @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  credentials String // JSON cifrado { refreshToken }
+  googleEmail String?
+  propertyUrl String? // "sc-domain:tienda.es" o "https://tienda.es/"
+  lastSyncAt  DateTime?
+  lastError   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+/// Rendimiento diario de un artículo en Google (Search Console).
+model ArticleMetric {
+  id          String   @id @default(cuid())
+  siteId      String
+  site        Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  articleId   String
+  article     Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  date        DateTime @db.Date
+  clicks      Int
+  impressions Int
+  position    Float
+
+  @@unique([articleId, date])
+  @@index([siteId, date])
+}
+
+/// Pedido de WooCommerce cuya sesión empezó en un artículo (atribución por página de entrada).
+model ArticleConversion {
+  id        String   @id @default(cuid())
+  siteId    String
+  site      Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  articleId String
+  article   Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  orderId   String
+  total     Float
+  currency  String
+  orderedAt DateTime
+
+  @@unique([siteId, orderId])
+  @@index([siteId, orderedAt])
 }
 
 model JobRun {
@@ -123,4 +287,24 @@ model UsageRecord {
   costCents    Int    @default(0)
 
   @@unique([siteId, period])
+}
+
+/// Visibilidad en asistentes de IA: una pregunta de comprador hecha a Claude con búsqueda web.
+model AiVisibilityCheck {
+  id          String   @id @default(cuid())
+  siteId      String
+  site        Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  /// Agrupa las preguntas de una misma ejecución (JobRun id).
+  runId       String
+  prompt      String
+  /// La respuesta menciona la marca o el dominio.
+  mentioned   Boolean
+  /// La respuesta cita una página del sitio como fuente.
+  cited       Boolean
+  /// Dominios citados en la respuesta (competencia en IA), sin el propio.
+  competitors String[]
+  answer      String   @db.Text
+  createdAt   DateTime @default(now())
+
+  @@index([siteId, createdAt])
 }

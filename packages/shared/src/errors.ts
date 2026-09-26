@@ -20,6 +20,17 @@ export const ERROR_CODES = [
   'NO_SEEDS',
   'INVALID_STATE',
   'QUOTA_EXCEEDED',
+  'PLAN_SITE_LIMIT',
+  'PLATFORM_NOT_SUPPORTED',
+  'BILLING_NOT_CONFIGURED',
+  'GOOGLE_NOT_CONFIGURED',
+  'GOOGLE_AUTH_FAILED',
+  'GSC_NOT_CONNECTED',
+  'PLAN_FEATURE_REQUIRED',
+  'APPROVAL_REQUIRED',
+  'MEMBER_LIMIT',
+  'INVITATION_INVALID',
+  'OWNER_REQUIRED',
   'AI_ERROR',
   'AI_TRUNCATED',
   'AI_INVALID_OUTPUT',
@@ -31,5 +42,11 @@ export const ERROR_CODES = [
 export type ErrorCode = (typeof ERROR_CODES)[number];
 
 /** Avisos no fatales que devuelven publicación y test de conexión. */
-export const WARNING_CODES = ['YOAST_META_NOT_EXPOSED', 'YOAST_NOT_DETECTED'] as const;
+/** YOAST_* se mantienen por compatibilidad con JobRun antiguos: cubren también Rank Math. */
+export const WARNING_CODES = [
+  'YOAST_META_NOT_EXPOSED',
+  'YOAST_NOT_DETECTED',
+  'CONNECTOR_NOT_INSTALLED',
+  'CONNECTOR_OUTDATED',
+] as const;
 export type WarningCode = (typeof WARNING_CODES)[number];

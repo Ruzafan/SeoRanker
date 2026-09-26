@@ -5,11 +5,19 @@ import { useMe } from './lib/hooks';
 import { AdminPage } from './pages/admin';
 import { ArticleEditorPage } from './pages/article-editor';
 import { ArticlesPage } from './pages/articles';
+import { BillingPage } from './pages/billing';
+import { CalendarPage } from './pages/calendar';
+import { InvitePage } from './pages/invite';
+import { OrganizationPage } from './pages/organization';
+import { ReportPage } from './pages/report';
 import { BrandVoicePage } from './pages/brand-voice';
 import { DashboardPage } from './pages/dashboard';
 import { JobsPage } from './pages/jobs';
 import { KeywordsPage } from './pages/keywords';
+import { LandingPage } from './pages/landing';
 import { LoginPage } from './pages/login';
+import { ComparisonPage, ExampleArticlePage, VerticalPage } from './public/pages';
+import { PerformancePage } from './pages/performance';
 import { SettingsPage } from './pages/settings';
 import { HomeRedirect, NewSitePage, SitesPage } from './pages/sites';
 import { ApiError } from './lib/api';
@@ -32,7 +40,12 @@ function RequireAuth({ children }: { children: ReactNode }) {
 export function App() {
   return (
     <Routes>
+      <Route path="/" element={<LandingPage />} />
+      <Route path="/ejemplo" element={<ExampleArticlePage />} />
+      <Route path="/comparativa/:slug" element={<ComparisonPage />} />
+      <Route path="/tiendas/:slug" element={<VerticalPage />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/invite/:token" element={<InvitePage />} />
       <Route
         element={
           <RequireAuth>
@@ -40,10 +53,12 @@ export function App() {
           </RequireAuth>
         }
       >
-        <Route path="/" element={<HomeRedirect />} />
+        <Route path="/app" element={<HomeRedirect />} />
         <Route path="/sites" element={<SitesPage />} />
         <Route path="/sites/new" element={<NewSitePage />} />
         <Route path="/admin" element={<AdminPage />} />
+        <Route path="/billing" element={<BillingPage />} />
+        <Route path="/organization" element={<OrganizationPage />} />
       </Route>
       <Route
         path="/sites/:siteId"
@@ -54,9 +69,12 @@ export function App() {
         }
       >
         <Route index element={<DashboardPage />} />
+        <Route path="performance" element={<PerformancePage />} />
         <Route path="keywords" element={<KeywordsPage />} />
         <Route path="articles" element={<ArticlesPage />} />
         <Route path="articles/:articleId" element={<ArticleEditorPage />} />
+        <Route path="calendar" element={<CalendarPage />} />
+        <Route path="report" element={<ReportPage />} />
         <Route path="voice" element={<BrandVoicePage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="jobs" element={<JobsPage />} />

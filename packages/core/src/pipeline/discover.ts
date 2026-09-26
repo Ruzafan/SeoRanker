@@ -1,5 +1,4 @@
 import { parseSettings } from '@seo/shared';
-import { AppError } from '../errors.js';
 import {
   normalizeScore,
   scoreKeywordsSchema,
@@ -18,9 +17,13 @@ import {
   type KeywordProvider,
 } from '../keywords/provider.js';
 import { siteScope } from '../tenant.js';
-import { loadSite, modelFor, siteContext } from './common.js';
+import { blendScore, type KeywordMetrics } from '../keywords/metrics.js';
+import { dedupeSimilar, findCannibal, type Target } from '../keywords/similarity.js';
+import { loadSite, metricsProviderFor, modelFor, siteContext } from './common.js';
 import type { PipelineContext, RunInfo } from './context.js';
 import { runTracked } from './run-tracked.js';
+import { startFirstArticle } from './onboarding.js';
+import { generateSeeds } from './seeds.js';
 
 const MAX_CANDIDATES = 300;
 const SCORE_BATCH = 60;
@@ -36,11 +39,12 @@ function httpDeps(ctx: PipelineContext): HttpDeps {
 export function runDiscover(ctx: PipelineContext, info: RunInfo): Promise<void> {
   return runTracked(ctx, info, async (tracker) => {
     const site = await loadSite(ctx, info.siteId);
-    const settings = parseSettings(site.settings);
-    if (settings.seeds.length === 0) {
-      throw new AppError('NO_SEEDS', 'The site has no seed keywords configured', {
-        httpStatus: 400,
-      });
+    let settings = parseSettings(site.settings);
+    // Sin seeds: se deducen del contenido de la tienda y se guardan (el usuario puede editarlas).
+    const seedsGenerated = settings.seeds.length === 0;
+    if (seedsGenerated) {
+      settings = { ...settings, seeds: await generateSeeds(ctx, site, tracker) };
+      await ctx.prisma.site.update({ where: { id: site.id }, data: { settings } });
     }
 
     const deps = httpDeps(ctx);
@@ -80,8 +84,18 @@ export function runDiscover(ctx: PipelineContext, info: RunInfo): Promise<void> 
     }
     const fresh = terms.filter((t) => !existing.has(t) && !seedSet.has(t)).slice(0, MAX_CANDIDATES);
 
-    // 3. Puntuar con Claude por lotes.
+    // 3. Puntuar con Claude por lotes; si hay proveedor de métricas, se mezcla con la demanda real.
     const model = modelFor(ctx, site);
+    const metricsProvider = metricsProviderFor(ctx);
+    let withMetrics = 0;
+    let cannibalized = 0;
+    // Lo que ya tiene artículo: una keyword con la misma intención competiría con él en Google.
+    const covered: Target[] = (
+      await ctx.prisma.article.findMany({
+        where: { siteId: site.id },
+        select: { id: true, title: true, keyword: { select: { term: true } } },
+      })
+    ).map((a) => ({ id: a.id, texts: [a.title, ...(a.keyword ? [a.keyword.term] : [])] }));
     let inserted = 0;
     let discarded = 0;
     for (let i = 0; i < fresh.length; i += SCORE_BATCH) {
@@ -100,38 +114,79 @@ export function runDiscover(ctx: PipelineContext, info: RunInfo): Promise<void> 
       const rows = result.data.keywords
         .map((k) => ({ ...k, term: normalizeTerm(k.term) }))
         .filter((k) => wanted.has(k.term));
-      const kept = rows.filter((k) => k.keep);
+      const unique = dedupeSimilar(
+        rows
+          .filter((k) => k.keep)
+          .map((k) => ({ ...k, score: normalizeScore(k.score, k.intent).score })),
+      );
+      const kept = unique.filter((k) => !findCannibal(k.term, covered));
+      cannibalized += unique.length - kept.length;
       discarded += batch.length - kept.length;
+      let metrics = new Map<string, KeywordMetrics>();
+      if (metricsProvider && kept.length) {
+        try {
+          metrics = await metricsProvider.getMetrics(
+            kept.map((k) => k.term),
+            { language: site.language, country: site.country },
+          );
+          withMetrics += metrics.size;
+        } catch (err) {
+          // Sin métricas se sigue con la puntuación de Claude: no merece tirar el descubrimiento.
+          ctx.log.warn({ siteId: site.id, err: String(err) }, 'keyword metrics unavailable');
+        }
+      }
       const created = await scope.keywords.createMany(
         kept.map((k) => {
           const c = candidates.get(k.term);
           const { score, intent } = normalizeScore(k.score, k.intent);
+          const m = metrics.get(k.term);
           return {
             term: k.term,
             source: c?.source ?? 'autocomplete',
             seedTerm: c?.seedTerm ?? null,
-            score,
+            score: blendScore(score, m),
             intent,
             status: 'pending',
+            volume: m?.volume ?? null,
+            difficulty: m?.difficulty ?? null,
+            cpc: m?.cpc ?? null,
           };
         }),
       );
       inserted += created.count;
     }
 
+    // Se releen los ajustes: el usuario (o una prueba de conexión) pudo cambiarlos mientras tanto.
+    const latest = parseSettings((await loadSite(ctx, site.id)).settings);
+    const onboarding = latest.onboarding === 'pending';
     await ctx.prisma.site.update({
       where: { id: site.id },
-      data: { settings: { ...settings, lastDiscoverAt: new Date().toISOString() } },
+      data: {
+        settings: {
+          ...latest,
+          seeds: settings.seeds,
+          lastDiscoverAt: new Date().toISOString(),
+          ...(onboarding ? { onboarding: 'done' as const } : {}),
+        },
+      },
     });
+    const firstArticle = onboarding ? await startFirstArticle(ctx, site.id) : undefined;
+    // Keywords nuevas: se reagrupan los clusters (pilar + satélites).
+    if (inserted > 0)
+      await ctx.dispatcher.enqueue('cluster', { siteId: site.id }).catch(() => undefined);
 
     return {
       meta: {
         seeds: settings.seeds.length,
+        seedsGenerated,
         providers: providers.map((p) => p.name),
         candidates: candidates.size,
         scored: fresh.length,
         inserted,
         discarded,
+        withMetrics,
+        cannibalized,
+        ...(firstArticle ? { firstArticle } : {}),
         prompt: SCORE_KEYWORDS_PROMPT_VERSION,
       },
     };

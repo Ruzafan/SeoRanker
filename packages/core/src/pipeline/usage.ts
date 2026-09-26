@@ -62,6 +62,13 @@ export class UsageTracker {
     await recordUsage(this.prisma, this.siteId, { ...usage, costCents });
   }
 
+  /** Coste que no son tokens (p. ej. búsquedas web: 1 céntimo de dólar por búsqueda). */
+  async addCost(costCents: number): Promise<void> {
+    if (costCents <= 0) return;
+    this.costCents += costCents;
+    await recordUsage(this.prisma, this.siteId, { costCents });
+  }
+
   toMeta(): Record<string, unknown> {
     return {
       inputTokens: this.inputTokens,

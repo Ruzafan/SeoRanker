@@ -13,6 +13,10 @@ import type { Env } from './env.js';
 import { registerAuth } from './plugins/auth.js';
 import { registerErrorHandler } from './plugins/error-handler.js';
 import { authRoutes } from './routes/auth.js';
+import { billingRoutes } from './routes/billing.js';
+import { integrationRoutes } from './routes/integrations.js';
+import { publicRoutes } from './routes/public.js';
+import { organizationRoutes } from './routes/organization.js';
 import { healthRoutes, type HealthChecks } from './routes/health.js';
 import { adminRoutes, resourceRoutes } from './routes/resources.js';
 
@@ -87,8 +91,13 @@ export async function buildApp({
           auth,
           config: { registrationEnabled: env.REGISTRATION_ENABLED, adminEmail: env.ADMIN_EMAIL },
           loginRateLimitMax: env.LOGIN_RATE_LIMIT_MAX,
+          core,
         }),
       );
+      await v1.register(publicRoutes(core));
+      await v1.register(billingRoutes(core, auth));
+      await v1.register(organizationRoutes(core, auth, env.WEB_ORIGIN));
+      await v1.register(integrationRoutes(core, auth, env.WEB_ORIGIN));
       await v1.register(resourceRoutes(core, auth));
       await v1.register(adminRoutes(core, auth));
     },

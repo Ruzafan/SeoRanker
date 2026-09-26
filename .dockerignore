@@ -5,3 +5,4 @@
 *.log
 key
 key.pub
+**/dist-ssr

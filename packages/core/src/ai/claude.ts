@@ -127,6 +127,11 @@ export class ClaudeClient {
     }
   }
 
+  /** Respuesta libre con búsqueda web (ver answerWithSearch). */
+  searchAnswer(input: SearchAnswerInput): Promise<SearchAnswerResult> {
+    return answerWithSearch(this.api, input);
+  }
+
   async callTool<T>(input: ToolCallInput<T>): Promise<ToolCallResult<T>> {
     let response: Anthropic.Message;
     try {
@@ -155,11 +160,13 @@ export class ClaudeClient {
       outputTokens: response.usage.output_tokens,
     };
 
+    // Lo gastado se cobra aunque la respuesta no sirva: viaja en el error para registrarlo.
+    const spent = { model: response.model, ...usage };
     if (response.stop_reason === 'max_tokens') {
       throw new AppError(
         'AI_TRUNCATED',
         `Model output truncated at max_tokens=${input.maxTokens} (${usage.outputTokens} tokens)`,
-        { httpStatus: 502, retryable: false },
+        { httpStatus: 502, retryable: false, usage: spent },
       );
     }
 
@@ -170,6 +177,7 @@ export class ClaudeClient {
       throw new AppError('AI_INVALID_OUTPUT', 'Model did not return the expected tool call', {
         httpStatus: 502,
         retryable: true,
+        usage: spent,
       });
     }
 
@@ -179,8 +187,101 @@ export class ClaudeClient {
       throw new AppError('AI_INVALID_OUTPUT', `Tool output failed validation: ${detail}`, {
         httpStatus: 502,
         retryable: true,
+        usage: spent,
       });
     }
     return { data: parsed.data, usage, model: response.model };
   }
+}
+
+export interface SearchAnswerInput {
+  model: string;
+  system: string;
+  user: string;
+  maxTokens: number;
+  /** Búsquedas web como máximo en la respuesta. */
+  maxSearches: number;
+  /** País ISO para localizar los resultados. */
+  country?: string;
+}
+
+export interface SearchAnswerResult {
+  text: string;
+  /** Resultados que devolvió la búsqueda web. */
+  sources: { url: string; title: string }[];
+  /** URL que la respuesta cita expresamente. */
+  citedUrls: string[];
+  searches: number;
+  usage: TokenUsage;
+  model: string;
+}
+
+const MAX_CONTINUATIONS = 3;
+
+/**
+ * Respuesta en texto libre con la herramienta de búsqueda web del servidor (como respondería un
+ * asistente a un usuario). Se usa para medir la visibilidad de una marca en asistentes de IA; no es
+ * salida estructurada, así que no pasa por callTool.
+ */
+export async function answerWithSearch(
+  api: MessagesApi,
+  input: SearchAnswerInput,
+): Promise<SearchAnswerResult> {
+  const messages: Anthropic.MessageParam[] = [{ role: 'user', content: input.user }];
+  const usage: TokenUsage = { inputTokens: 0, outputTokens: 0 };
+  const content: Anthropic.ContentBlock[] = [];
+  let searches = 0;
+  let model = input.model;
+  for (let i = 0; i <= MAX_CONTINUATIONS; i++) {
+    let response: Anthropic.Message;
+    try {
+      response = await api.messages.create({
+        model: input.model,
+        max_tokens: input.maxTokens,
+        system: input.system,
+        messages,
+        tools: [
+          {
+            // Variante básica a propósito: la de filtrado dinámico (20260209) mete el contenido de
+            // las páginas en el contexto (~6× más tokens y ~6× más lenta, medido) y no devuelve
+            // citas, que es justo lo que necesita la medición de visibilidad.
+            type: 'web_search_20250305',
+            name: 'web_search',
+            max_uses: input.maxSearches,
+            ...(input.country
+              ? { user_location: { type: 'approximate' as const, country: input.country } }
+              : {}),
+          },
+        ],
+      });
+    } catch (err) {
+      throw mapApiError(err);
+    }
+    usage.inputTokens += response.usage.input_tokens;
+    usage.outputTokens += response.usage.output_tokens;
+    searches += response.usage.server_tool_use?.web_search_requests ?? 0;
+    model = response.model;
+    content.push(...response.content);
+    // pause_turn: el servidor cortó un turno largo; se continúa reenviando lo recibido.
+    if (response.stop_reason !== 'pause_turn') break;
+    messages.push({ role: 'assistant', content: response.content });
+  }
+
+  const text = content
+    .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+    .map((b) => b.text)
+    .join('');
+  const sources = content
+    .filter((b): b is Anthropic.WebSearchToolResultBlock => b.type === 'web_search_tool_result')
+    .flatMap((b) => (Array.isArray(b.content) ? b.content : []))
+    .map((r) => ({ url: r.url, title: r.title }));
+  const citedUrls = content
+    .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+    .flatMap((b) => b.citations ?? [])
+    .filter(
+      (c): c is Anthropic.CitationsWebSearchResultLocation =>
+        c.type === 'web_search_result_location',
+    )
+    .map((c) => c.url);
+  return { text, sources, citedUrls: [...new Set(citedUrls)], searches, usage, model };
 }

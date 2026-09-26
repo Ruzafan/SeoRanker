@@ -1,7 +1,17 @@
-import { ArrowDown, ArrowUp, Ban, Compass, KeyRound, Plus, Sparkles, Trash2 } from 'lucide-react';
+import {
+  ArrowDown,
+  ArrowUp,
+  Ban,
+  Compass,
+  KeyRound,
+  Layers,
+  Plus,
+  Sparkles,
+  Trash2,
+} from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { KEYWORD_STATUSES, type KeywordStatus } from '@seo/shared';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { KEYWORD_SOURCES, KEYWORD_STATUSES, type KeywordStatus } from '@seo/shared';
 import {
   Badge,
   Button,
@@ -18,16 +28,18 @@ import {
 import {
   useAddKeywords,
   useBatchKeywords,
+  useClusters,
   useDeleteKeyword,
   useDiscover,
   useGenerate,
   useKeywords,
   usePatchKeyword,
+  useRebuildClusters,
   useSite,
   withToast,
   type KeywordFilters,
 } from '../lib/hooks';
-import { intentLabel, keywordStatusLabel } from '../lib/i18n';
+import { intentLabel, keywordSourceLabel, keywordStatusLabel } from '../lib/i18n';
 
 function useDebounced<T>(value: T, ms = 300): T {
   const [v, setV] = useState(value);
@@ -41,7 +53,13 @@ function useDebounced<T>(value: T, ms = 300): T {
 export function KeywordsPage() {
   const { siteId = '' } = useParams();
   const { data: site } = useSite(siteId);
+  const [params] = useSearchParams();
   const [status, setStatus] = useState<KeywordStatus | ''>('');
+  const [source, setSource] = useState(params.get('source') ?? '');
+  const [clusterId, setClusterId] = useState('');
+  const clusters = useClusters(siteId);
+  const rebuild = useRebuildClusters(siteId);
+  const clusterName = new Map(clusters.data?.map((c) => [c.id, c.name]));
   const [searchInput, setSearchInput] = useState('');
   const search = useDebounced(searchInput);
   const [sort, setSort] = useState<KeywordFilters['sort']>('score');
@@ -53,6 +71,8 @@ export function KeywordsPage() {
 
   const filters: KeywordFilters = {
     ...(status ? { status } : {}),
+    ...(source ? { source } : {}),
+    ...(clusterId ? { clusterId } : {}),
     ...(search ? { search } : {}),
     sort,
     order,
@@ -66,8 +86,8 @@ export function KeywordsPage() {
   const del = useDeleteKeyword(siteId);
   const generate = useGenerate(siteId);
 
-  useEffect(() => setPage(1), [status, search, sort, order]);
-  useEffect(() => setSelected(new Set()), [status, search, page]);
+  useEffect(() => setPage(1), [status, source, clusterId, search, sort, order]);
+  useEffect(() => setSelected(new Set()), [status, source, clusterId, search, page]);
 
   const items = data?.items ?? [];
   const allSelected = items.length > 0 && items.every((k) => selected.has(k.id));
@@ -105,6 +125,9 @@ export function KeywordsPage() {
   };
 
   const ids = [...selected];
+  // Columnas de métricas solo si hay datos (sin DataForSEO o Search Console serían todo «—»).
+  const showVolume = items.some((k) => k.volume !== null);
+  const showGoogle = items.some((k) => k.gscImpressions !== null);
   return (
     <>
       <PageHeader
@@ -119,8 +142,7 @@ export function KeywordsPage() {
               variant="secondary"
               icon={Compass}
               loading={discover.isPending}
-              disabled={!hasSeeds}
-              title={hasSeeds ? undefined : 'Añade semillas en Ajustes'}
+              title={hasSeeds ? undefined : 'Sin semillas: se deducirán del contenido de tu tienda'}
               onClick={() =>
                 void withToast(
                   discover.mutateAsync(),
@@ -154,6 +176,60 @@ export function KeywordsPage() {
         </Card>
       )}
 
+      <div className="mb-4 rounded-xl border border-stone-200 p-3 dark:border-stone-800">
+        <div className="flex flex-wrap items-center gap-2">
+          <Layers className="h-4 w-4 text-stone-500" />
+          <span className="text-sm font-medium">Clusters</span>
+          <span className="text-xs text-stone-500">
+            Primero se escribe la guía pilar de cada tema y después sus artículos, enlazados entre
+            sí.
+          </span>
+          <Button
+            variant="ghost"
+            className="ml-auto"
+            loading={rebuild.isPending}
+            onClick={() => void withToast(rebuild.mutateAsync(), 'Reagrupando keywords…')}
+          >
+            Reagrupar
+          </Button>
+        </div>
+        {(clusters.data?.length ?? 0) > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              onClick={() => setClusterId('')}
+              className={cx(
+                'rounded-full border px-2.5 py-1 text-xs',
+                !clusterId
+                  ? 'border-teal-600 text-teal-800 dark:text-teal-300'
+                  : 'border-stone-200 dark:border-stone-700',
+              )}
+            >
+              Todos
+            </button>
+            {clusters.data?.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => setClusterId(c.id === clusterId ? '' : c.id)}
+                title={c.pillar ? `Pilar: ${c.pillar.term}` : undefined}
+                className={cx(
+                  'rounded-full border px-2.5 py-1 text-xs',
+                  c.id === clusterId
+                    ? 'border-teal-600 text-teal-800 dark:text-teal-300'
+                    : 'border-stone-200 dark:border-stone-700',
+                )}
+              >
+                {c.name}{' '}
+                <span className="tabular-nums text-stone-500">
+                  {c.done}/{c.keywords}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
       <div className="mb-3 flex flex-col gap-2 sm:flex-row">
         <input
           className={cx(inputClass, 'sm:max-w-xs')}
@@ -172,6 +248,19 @@ export function KeywordsPage() {
           {KEYWORD_STATUSES.map((s) => (
             <option key={s} value={s}>
               {keywordStatusLabel[s]}
+            </option>
+          ))}
+        </select>
+        <select
+          className={cx(inputClass, 'sm:w-56')}
+          value={source}
+          onChange={(e) => setSource(e.target.value)}
+          aria-label="Filtrar por origen"
+        >
+          <option value="">Todos los orígenes</option>
+          {KEYWORD_SOURCES.map((s) => (
+            <option key={s} value={s}>
+              {keywordSourceLabel[s]}
             </option>
           ))}
         </select>
@@ -216,10 +305,12 @@ export function KeywordsPage() {
         <EmptyState
           icon={KeyRound}
           title={
-            status || search ? 'Ninguna keyword coincide con el filtro' : 'Aún no tienes keywords'
+            status || source || search
+              ? 'Ninguna keyword coincide con el filtro'
+              : 'Aún no tienes keywords'
           }
           action={
-            !status && !search ? (
+            !status && !source && !search ? (
               hasSeeds ? (
                 <Button
                   icon={Compass}
@@ -235,7 +326,7 @@ export function KeywordsPage() {
             ) : undefined
           }
         >
-          {status || search
+          {status || source || search
             ? 'Prueba con otro estado o quita la búsqueda.'
             : hasSeeds
               ? 'Descubre keywords a partir de tus semillas: Google Autocomplete las expande y Claude las puntúa.'
@@ -277,6 +368,30 @@ export function KeywordsPage() {
                     Score {sort === 'score' && <SortIcon className="h-3 w-3" />}
                   </button>
                 </th>
+                {showVolume && (
+                  <th className="hidden p-3 md:table-cell">
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 font-medium uppercase"
+                      onClick={() => toggleSort('volume')}
+                      title="Búsquedas al mes y dificultad (0-100)"
+                    >
+                      Volumen {sort === 'volume' && <SortIcon className="h-3 w-3" />}
+                    </button>
+                  </th>
+                )}
+                {showGoogle && (
+                  <th className="hidden p-3 md:table-cell">
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 font-medium uppercase"
+                      onClick={() => toggleSort('gscImpressions')}
+                      title="Impresiones y posición media en Google (Search Console, 28 días)"
+                    >
+                      Google {sort === 'gscImpressions' && <SortIcon className="h-3 w-3" />}
+                    </button>
+                  </th>
+                )}
                 <th className="hidden p-3 sm:table-cell">Intención</th>
                 <th className="p-3">Estado</th>
                 <th className="w-28 p-3" />
@@ -302,11 +417,64 @@ export function KeywordsPage() {
                     <td className="p-3">
                       <span className="font-medium">{k.term}</span>
                       <span className="mt-0.5 block text-xs text-stone-500">
-                        {k.source}
+                        {keywordSourceLabel[k.source as keyof typeof keywordSourceLabel] ??
+                          k.source}
                         {k.seedTerm ? ` · de «${k.seedTerm}»` : ''}
+                        {k.clusterId && clusterName.get(k.clusterId)
+                          ? ` · ${clusterName.get(k.clusterId)}`
+                          : ''}
                       </span>
+                      {k.discardReason === 'CANNIBALIZATION' && (
+                        <span className="mt-1 block text-xs text-amber-700 dark:text-amber-400">
+                          Descartada: ya hay{' '}
+                          {k.similarToArticleId ? (
+                            <Link
+                              to={`../articles/${k.similarToArticleId}`}
+                              relative="path"
+                              className="underline"
+                            >
+                              un artículo
+                            </Link>
+                          ) : (
+                            'un post en tu blog'
+                          )}{' '}
+                          para esta búsqueda. «Recuperar» la escribe igualmente.
+                        </span>
+                      )}
                     </td>
                     <td className="p-3 tabular-nums">{k.score}</td>
+                    {showVolume && (
+                      <td className="hidden p-3 tabular-nums md:table-cell">
+                        {k.volume === null ? (
+                          '—'
+                        ) : (
+                          <>
+                            {k.volume.toLocaleString('es-ES')}
+                            {k.difficulty !== null && (
+                              <span className="block text-xs text-stone-500">
+                                KD {k.difficulty}
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </td>
+                    )}
+                    {showGoogle && (
+                      <td className="hidden p-3 tabular-nums md:table-cell">
+                        {k.gscImpressions === null ? (
+                          '—'
+                        ) : (
+                          <>
+                            {k.gscImpressions.toLocaleString('es-ES')} impr.
+                            {k.gscPosition !== null && (
+                              <span className="block text-xs text-stone-500">
+                                pos. {k.gscPosition.toFixed(1).replace('.', ',')}
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </td>
+                    )}
                     <td className="hidden p-3 sm:table-cell">
                       {k.intent ? <Badge>{intentLabel[k.intent] ?? k.intent}</Badge> : '—'}
                     </td>

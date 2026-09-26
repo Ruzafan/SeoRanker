@@ -1,17 +1,20 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { CheckCircle2, Plug, Save, Trash2 } from 'lucide-react';
+import { Plug, Save, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import {
+  PLANS,
+  isPlanId,
   siteSettingsSchema,
   type ConnectionTestDto,
   type SiteDto,
   type UpdateSiteInput,
 } from '@seo/shared';
 import {
+  Badge,
   Button,
   Card,
   ErrorBanner,
@@ -21,8 +24,16 @@ import {
   cx,
   inputClass,
 } from '../components/ui';
-import { YOAST_SNIPPET } from '../lib/format';
-import { useDeleteSite, useSite, useTestConnection, useUpdateSite, withToast } from '../lib/hooks';
+import { ConnectorCard } from '../components/connector';
+import {
+  useAuthors,
+  useMe,
+  useDeleteSite,
+  useSite,
+  useTestConnection,
+  useUpdateSite,
+  withToast,
+} from '../lib/hooks';
 import { cadenceLabel, errorMessages, warningMessages } from '../lib/i18n';
 
 const formSchema = z.object({
@@ -38,6 +49,12 @@ const formSchema = z.object({
   autoPublish: siteSettingsSchema.shape.autoPublish,
   categoryId: z.string().regex(/^\d*$/, 'Debe ser un número'),
   model: z.string().trim().max(100),
+  expertise: z.string().max(3000, 'Máximo 3000 caracteres'),
+  authorId: z.string(),
+  productCards: z.boolean(),
+  autoBacklinks: z.boolean(),
+  autoRefresh: z.boolean(),
+  requireApproval: z.boolean(),
   active: z.boolean(),
 });
 type FormValues = z.infer<typeof formSchema>;
@@ -55,6 +72,12 @@ const toForm = (s: SiteDto): FormValues => ({
   autoPublish: s.settings.autoPublish,
   categoryId: s.settings.categoryId ? String(s.settings.categoryId) : '',
   model: s.settings.model ?? '',
+  expertise: s.settings.expertise ?? '',
+  authorId: s.settings.authorId ? String(s.settings.authorId) : '',
+  productCards: s.settings.productCards,
+  autoBacklinks: s.settings.autoBacklinks,
+  autoRefresh: s.settings.autoRefresh,
+  requireApproval: s.settings.requireApproval,
   active: s.active,
 });
 
@@ -66,6 +89,9 @@ export function SettingsPage() {
   const test = useTestConnection(siteId);
   const del = useDeleteSite(siteId);
   const [result, setResult] = useState<ConnectionTestDto | null>(null);
+  const authors = useAuthors(siteId, !!site?.hasCredentials);
+  const { data: me } = useMe();
+  const plan = me && isPlanId(me.plan) ? PLANS[me.plan] : PLANS.free;
 
   const { register, handleSubmit, reset, formState } = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -100,6 +126,12 @@ export function SettingsPage() {
         autoPublish: v.autoPublish,
         categoryId: v.categoryId ? Number(v.categoryId) : null,
         model: v.model || null,
+        expertise: v.expertise.trim() || null,
+        authorId: v.authorId ? Number(v.authorId) : null,
+        productCards: v.productCards,
+        autoBacklinks: v.autoBacklinks,
+        autoRefresh: v.autoRefresh,
+        requireApproval: v.requireApproval,
       },
     };
     // Las credenciales solo se envían si el usuario escribe algo; en blanco = mantener las guardadas.
@@ -113,9 +145,6 @@ export function SettingsPage() {
     const r = await withToast(test.mutateAsync());
     if (r) setResult(r);
   };
-
-  const yoastBroken =
-    result?.warnings.includes('YOAST_META_NOT_EXPOSED') || site.settings.yoastMetaExposed === false;
 
   return (
     <>
@@ -202,13 +231,15 @@ export function SettingsPage() {
                   tone="green"
                   title={`Conexión correcta${result.details?.siteName ? ` con «${result.details.siteName}»` : ''}`}
                 >
-                  Yoast SEO:{' '}
-                  {result.details?.yoastActive === true
-                    ? 'detectado'
-                    : result.details?.yoastActive === false
-                      ? 'no detectado'
-                      : 'no se pudo comprobar'}
-                  .
+                  Plugin SEO:{' '}
+                  {result.details?.seoPlugin === 'yoast'
+                    ? 'Yoast SEO'
+                    : result.details?.seoPlugin === 'rankmath'
+                      ? 'Rank Math'
+                      : 'no detectado'}
+                  {' · '}WooCommerce: {result.details?.woocommerce ? 'sí' : 'no'}
+                  {result.details?.yoastMetaExposed === true &&
+                    ' · La meta SEO se guardará en tu plugin.'}
                 </Notice>
               ) : (
                 <Notice
@@ -217,49 +248,81 @@ export function SettingsPage() {
                   }
                 />
               )}
-              {result.warnings
-                .filter((w) => w !== 'YOAST_META_NOT_EXPOSED')
-                .map((w) => (
-                  <Notice key={w} title={warningMessages[w]} />
-                ))}
+              {result.warnings.map((w) => (
+                <Notice key={w} title={warningMessages[w]} />
+              ))}
             </div>
           )}
-          {yoastBroken && (
-            <Notice title={warningMessages.YOAST_META_NOT_EXPOSED}>
-              <p className="mb-2">
-                Para que la meta description y la keyword principal lleguen a Yoast, pega esto en el{' '}
-                <code>functions.php</code> de tu tema (o en un plugin de snippets):
-              </p>
-              <pre className="overflow-x-auto rounded bg-white/70 p-2 text-[11px] leading-snug dark:bg-black/30">
-                {YOAST_SNIPPET}
-              </pre>
-              <Button
-                type="button"
-                variant="secondary"
-                className="mt-2"
-                onClick={() =>
-                  void navigator.clipboard
-                    .writeText(YOAST_SNIPPET)
-                    .then(() => toast.success('Copiado'))
-                }
-              >
-                Copiar snippet
-              </Button>
-            </Notice>
-          )}
-          {!yoastBroken && result?.details?.yoastMetaExposed === true && (
-            <p className="flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400">
-              <CheckCircle2 className="h-3.5 w-3.5" /> Yoast expone sus campos por REST: la meta
-              description se guardará en Yoast.
+        </Card>
+
+        <ConnectorCard settings={site.settings} />
+
+        <Card className="space-y-4">
+          <div>
+            <h2 className="font-medium">Autoría y experiencia</h2>
+            <p className="text-sm text-stone-600 dark:text-stone-400">
+              Google premia el contenido escrito desde la experiencia real (E-E-A-T). Lo que
+              escribas aquí se usa en los artículos como experiencia de primera mano; la IA no
+              inventará otras.
             </p>
-          )}
+          </div>
+          <Field
+            label="Vuestra experiencia"
+            hint="Años en el sector, especialidad, qué veis a diario con vuestros clientes, garantías, cómo probáis los productos…"
+            error={errors.expertise?.message}
+          >
+            <textarea
+              className={cx(inputClass, 'min-h-28')}
+              placeholder="Llevamos 12 años vendiendo figuras de colección. Revisamos cada pieza antes del envío y el 90 % de las consultas que recibimos son sobre cómo limpiarlas y exponerlas sin que amarilleen."
+              {...register('expertise')}
+            />
+          </Field>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field
+              label="Autor de los artículos"
+              hint={
+                authors.error
+                  ? 'No se pudo leer la lista de usuarios de WordPress.'
+                  : 'Usuario de WordPress que firma los posts.'
+              }
+            >
+              <select className={inputClass} {...register('authorId')}>
+                <option value="">El usuario de la conexión</option>
+                {authors.data?.map((a) => (
+                  <option key={a.id} value={String(a.id)}>
+                    {a.name}
+                  </option>
+                ))}
+                {site.settings.authorId &&
+                  !authors.data?.some((a) => a.id === site.settings.authorId) && (
+                    <option value={String(site.settings.authorId)}>
+                      Usuario #{site.settings.authorId}
+                    </option>
+                  )}
+              </select>
+            </Field>
+          </div>
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="mt-0.5 rounded border-stone-300 text-teal-700 focus:ring-teal-600"
+              {...register('productCards')}
+            />
+            <span>
+              Recomendar productos de la tienda en los artículos
+              <span className="block text-xs text-stone-500">
+                Con WooCommerce: tarjetas con precio y botón de compra (solo cuando encajan con el
+                tema) y la foto del producto como imagen destacada.
+              </span>
+            </span>
+          </label>
         </Card>
 
         <Card className="space-y-4">
           <h2 className="font-medium">Contenido y automatización</h2>
           <Field
             label="Keywords semilla"
-            hint="Una por línea. De estas se descubren las demás (p. ej. «figuras de acción», «coleccionables anime»)."
+            hint="Opcional. Una por línea. Si lo dejas vacío, el primer descubrimiento las deduce del contenido de tu tienda y las verás aquí para ajustarlas."
             error={errors.seedsText?.message}
           >
             <textarea className={cx(inputClass, 'min-h-28')} {...register('seedsText')} />
@@ -309,6 +372,55 @@ export function SettingsPage() {
               </datalist>
             </Field>
           </div>
+          <label
+            className={cx('flex items-start gap-2 text-sm', !plan.contentRefresh && 'opacity-60')}
+          >
+            <input
+              type="checkbox"
+              disabled={!plan.contentRefresh}
+              className="mt-0.5 rounded border-stone-300 text-teal-700 focus:ring-teal-600"
+              {...register('autoRefresh')}
+            />
+            <span>
+              Refrescar automáticamente lo que pierde tráfico{' '}
+              {!plan.contentRefresh && <Badge>Pro</Badge>}
+              <span className="block text-xs text-stone-500">
+                Con Search Console: cuando un artículo pierde más del 30 % de clics, se actualiza
+                con lo que posiciona hoy. Cuenta como un artículo del mes.
+              </span>
+            </span>
+          </label>
+          <label className={cx('flex items-start gap-2 text-sm', !plan.approvals && 'opacity-60')}>
+            <input
+              type="checkbox"
+              disabled={!plan.approvals}
+              className="mt-0.5 rounded border-stone-300 text-teal-700 focus:ring-teal-600"
+              {...register('requireApproval')}
+            />
+            <span>
+              Exigir aprobación del cliente antes de publicar{' '}
+              {!plan.approvals && <Badge>Agency</Badge>}
+              <span className="block text-xs text-stone-500">
+                Nada sale a WordPress (ni lo automático ni lo programado) hasta que alguien lo
+                apruebe en el editor. Invita a tu cliente en «Equipo y clientes».
+              </span>
+            </span>
+          </label>
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="mt-0.5 rounded border-stone-300 text-teal-700 focus:ring-teal-600"
+              {...register('autoBacklinks')}
+            />
+            <span>
+              Enlazado inverso automático
+              <span className="block text-xs text-stone-500">
+                Cuando un artículo se publica, añadimos un enlace hacia él en hasta 3 artículos
+                antiguos relacionados (un solo párrafo, sin cambiar el resto) y los actualizamos en
+                WordPress.
+              </span>
+            </span>
+          </label>
           <label className="flex items-start gap-2 text-sm">
             <input
               type="checkbox"
@@ -316,10 +428,11 @@ export function SettingsPage() {
               {...register('autoPublish')}
             />
             <span>
-              Publicación automática
+              Publicar directamente (sin borrador)
               <span className="block text-xs text-stone-500">
-                Desactivado: los artículos se envían a WordPress como <strong>borrador</strong> para
-                que los revises.
+                Activado: lo que genera la automatización se publica en tu web en cuanto está listo.
+                Desactivado: llega a WordPress como <strong>borrador</strong> para que lo revises.
+                Al enviar a mano desde el editor eliges tú en cada artículo.
               </span>
             </span>
           </label>
@@ -354,7 +467,7 @@ export function SettingsPage() {
             del.mutate(undefined, {
               onSuccess: () => {
                 toast.success('Sitio eliminado');
-                navigate('/');
+                navigate('/app');
               },
             });
           }}

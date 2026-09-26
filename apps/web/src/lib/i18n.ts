@@ -1,4 +1,11 @@
-import type { ArticleStatus, ErrorCode, JobType, KeywordStatus, WarningCode } from '@seo/shared';
+import type {
+  ArticleStatus,
+  ErrorCode,
+  JobType,
+  KEYWORD_SOURCES,
+  KeywordStatus,
+  WarningCode,
+} from '@seo/shared';
 import { ApiError } from './api';
 
 /** Traducción de códigos de error del backend. Tipado exhaustivo: un código nuevo no compila sin traducir. */
@@ -20,9 +27,23 @@ export const errorMessages: Record<ErrorCode | 'NETWORK_ERROR', string> = {
   WP_REST_NOT_FOUND:
     'No se encontró la API REST de WordPress en esa URL. Revisa la dirección y que los enlaces permanentes no estén en «Simple».',
   NO_CREDENTIALS: 'Este sitio no tiene credenciales de WordPress. Añádelas en Ajustes.',
-  NO_SEEDS: 'Añade al menos una keyword semilla en Ajustes antes de descubrir keywords.',
+  NO_SEEDS:
+    'No hay semillas ni contenido publicado del que deducirlas. Publica algo en la tienda o añade semillas en Ajustes.',
   INVALID_STATE: 'Esa acción no se puede hacer en el estado actual.',
-  QUOTA_EXCEEDED: 'Has alcanzado el límite mensual de artículos de tu plan.',
+  PLAN_SITE_LIMIT:
+    'Tu plan no admite más tiendas. Cambia de plan para conectar otra o elimina una que no uses.',
+  PLATFORM_NOT_SUPPORTED: 'Esa plataforma todavía no está disponible. De momento, WordPress.',
+  BILLING_NOT_CONFIGURED: 'Los pagos no están activados en este servidor.',
+  OWNER_REQUIRED: 'Solo el propietario de la cuenta puede hacer esto.',
+  GOOGLE_NOT_CONFIGURED: 'La conexión con Google no está activada en este servidor.',
+  GOOGLE_AUTH_FAILED: 'Google rechazó el acceso o ha caducado. Vuelve a conectar Search Console.',
+  GSC_NOT_CONNECTED: 'Conecta Search Console para ver esta información.',
+  PLAN_FEATURE_REQUIRED: 'Tu plan no incluye esta función. Puedes ampliarlo en Plan y facturación.',
+  APPROVAL_REQUIRED: 'Este artículo necesita la aprobación del cliente antes de publicarse.',
+  MEMBER_LIMIT: 'Tu plan no admite más usuarios. Amplíalo o quita a alguien del equipo.',
+  INVITATION_INVALID: 'La invitación no existe, ya se usó o ha caducado. Pide un enlace nuevo.',
+  QUOTA_EXCEEDED:
+    'Has alcanzado el límite mensual de artículos de tu plan. Puedes ampliarlo en Plan y facturación.',
   AI_ERROR: 'Falló la llamada a Claude. Suele ser temporal; reintenta en unos minutos.',
   AI_TRUNCATED:
     'La respuesta de Claude se cortó por longitud. Reduce las palabras por artículo y regenera.',
@@ -49,8 +70,12 @@ export function parseJobError(error: string | null): { text: string; detail: str
 
 export const warningMessages: Record<WarningCode, string> = {
   YOAST_META_NOT_EXPOSED:
-    'Yoast no expone sus campos por la API REST: la meta description y la keyword principal no se han podido guardar en Yoast.',
-  YOAST_NOT_DETECTED: 'No se ha detectado Yoast SEO en el sitio.',
+    'Tu plugin SEO no expone sus campos por la API REST: la meta description y la keyword principal no se han podido guardar. Instala el conector.',
+  YOAST_NOT_DETECTED:
+    'No se ha detectado Yoast SEO ni Rank Math. Los artículos se publican igual, pero sin su meta SEO.',
+  CONNECTOR_NOT_INSTALLED:
+    'El conector de WordPress no está instalado: sin él no se guardan la meta SEO ni los datos estructurados.',
+  CONNECTOR_OUTDATED: 'Hay una versión nueva del conector de WordPress. Descárgala y actualízalo.',
 };
 
 export const keywordStatusLabel: Record<KeywordStatus, string> = {
@@ -60,6 +85,14 @@ export const keywordStatusLabel: Record<KeywordStatus, string> = {
   done: 'Hecha',
   failed: 'Fallida',
   discarded: 'Descartada',
+};
+
+export const keywordSourceLabel: Record<(typeof KEYWORD_SOURCES)[number], string> = {
+  manual: 'Manual',
+  autocomplete: 'Autocompletado de Google',
+  paa: 'La gente también pregunta',
+  gsc: 'Search Console (ya asomas)',
+  import: 'Importada',
 };
 
 export const articleStatusLabel: Record<ArticleStatus, string> = {
@@ -77,6 +110,11 @@ export const jobTypeLabel: Record<JobType, string> = {
   write: 'Redacción',
   publish: 'Publicación',
   'brand-voice': 'Voz de marca',
+  sync: 'Sincronización (Google y tienda)',
+  cluster: 'Agrupar en clusters',
+  backlink: 'Enlazado inverso',
+  refresh: 'Refresco de contenido',
+  'ai-visibility': 'Visibilidad en IA',
   watchdog: 'Vigilante',
   schedule: 'Programación',
 };

@@ -4,10 +4,10 @@ Monorepo pnpm: generación automática de artículos SEO para WordPress/WooComme
 
 ## Estructura
 
-- `apps/api` Fastify 4 (REST `/api/v1`), `apps/worker` BullMQ, `apps/web` React + Vite + Tailwind v3
+- `apps/api` Fastify 4 (REST `/api/v1`), `apps/worker` BullMQ, `apps/web` React + Vite + Tailwind v3 (páginas públicas prerenderizadas en el build: `prerender.mjs`), `apps/wp-plugin` conector de WordPress (PHP; el build web lo sirve como ZIP)
 - `packages/core` lógica de negocio (pipeline, providers, adapters, servicios, IA), `packages/db` Prisma + cliente (+ `@seo/db/testing`), `packages/shared` schemas zod, DTOs y códigos de error api↔web
 
-Dónde está qué en `packages/core/src`: `services/` (lo que llaman las rutas), `pipeline/` (trabajos: brand-voice, discover, outline, write, publish, watchdog, scheduler), `ai/claude.ts` (único módulo que habla con Anthropic) y `ai/prompts/` (uno por archivo, versionados), `adapters/` (WordPress real, Shopify = contrato), `keywords/provider.ts` (interfaz `KeywordProvider`), `tenant.ts` (aislamiento por sitio), `queue.ts`.
+Dónde está qué en `packages/core/src`: `services/` (lo que llaman las rutas; `billing.ts` = Stripe), `pipeline/` (trabajos: brand-voice, discover, outline, write, publish, sync, cluster, backlink, refresh, ai-visibility, watchdog, scheduler), `ai/claude.ts` (único módulo que habla con Anthropic) y `ai/prompts/` (uno por archivo, versionados), `adapters/` (WordPress real, Shopify = contrato), `keywords/` (`provider.ts` Autocomplete/PAA, `metrics.ts` DataForSEO, `serp.ts`, `similarity.ts` anticanibalización), `integrations/google.ts` (OAuth + Search Console), `seo/schema.ts` (JSON-LD), `tenant.ts` (aislamiento por sitio), `queue.ts` (un tipo de trabajo = una cola; `PipelineJobType` sale de `QUEUE_NAMES`).
 
 ## Comandos
 
@@ -28,6 +28,8 @@ Dónde está qué en `packages/core/src`: `services/` (lo que llaman las rutas),
 - Salida estructurada de Claude siempre por tool use (schema zod → JSON Schema), nunca JSON en texto.
 - Env validado con zod en un único `env.ts` por app; si falta algo, no arranca.
 - Estados "en curso" (`processing`, `writing`, `publishing`, `queued`) deben poder recuperarse: si añades uno, contémplalo en `pipeline/watchdog.ts`.
+- Roles: `owner` | `member` | `viewer`. El `viewer` (cliente) solo lee; una ruta que no sea GET y deba permitírsele se marca `config: { viewerAllowed: true }` (lo aplica `requireWriter`). Facturación, miembros y marca: solo `owner` (`OWNER_REQUIRED`).
+- Funciones de pago: flags en `PLANS` (`@seo/shared/plans.ts`) y comprobación en el servicio (`PLAN_FEATURE_REQUIRED`), nunca solo en el frontend.
 
 ## Versiones fijadas a propósito
 
@@ -35,4 +37,4 @@ TypeScript `~5.9`, Prisma `^6` (client y CLI alineados), Fastify `^4` con plugin
 
 ## Estado
 
-Fases 0–7 implementadas. Pendiente de verificar con credenciales reales: llamadas a Claude (tool use real, calidad/longitud de artículos), WordPress/WooCommerce real (Application Passwords, meta de Yoast) y despliegue en Railway/Fly. El frontend está verificado por compilación y tipos, no por pruebas de navegador.
+Fases 0–7 y roadmap de producto implementados (Stripe, conector WP, Search Console, calidad SERP/métricas/productos/JSON-LD, landing prerenderizada, clusters/canibalización/enlazado inverso, flujo editorial, visibilidad en IA). Verificado de extremo a extremo con Claude real (brand-voice → discover → cluster → outline → write@3 → publish) contra WordPress 7.1 + WooCommerce + Rank Math/Yoast reales en Docker, y la búsqueda web de Claude con la API real. El panel se ha recorrido en Chrome headless sin errores y las páginas públicas hidratan sin diferencias. Pendiente de verificar con credenciales reales: Stripe (checkout y webhooks), OAuth de Google/Search Console, DataForSEO, SerpAPI (la clave del `.env` local no es válida) y despliegue en Railway/Fly.

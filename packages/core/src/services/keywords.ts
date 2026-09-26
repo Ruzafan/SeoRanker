@@ -2,6 +2,7 @@ import type { Keyword, Prisma } from '@seo/db';
 import type {
   BatchKeywordsInput,
   BatchResultDto,
+  ClusterDto,
   CreateKeywordsInput,
   EnqueuedDto,
   KeywordQuery,
@@ -24,12 +25,20 @@ export async function listKeywords(
   const scope = siteScope(deps.prisma, siteId);
   const where: Prisma.KeywordWhereInput = {
     ...(q.status ? { status: q.status } : {}),
+    ...(q.source ? { source: q.source } : {}),
+    ...(q.clusterId ? { clusterId: q.clusterId } : {}),
     ...(q.search ? { term: { contains: q.search, mode: 'insensitive' } } : {}),
   };
   const [items, total] = await Promise.all([
     scope.keywords.findMany({
       where,
-      orderBy: [{ [q.sort]: q.order }, { id: 'asc' }],
+      // Volumen e impresiones pueden faltar: los vacíos van siempre al final.
+      orderBy: [
+        q.sort === 'volume' || q.sort === 'gscImpressions'
+          ? { [q.sort]: { sort: q.order, nulls: 'last' } }
+          : { [q.sort]: q.order },
+        { id: 'asc' },
+      ],
       skip: (q.page - 1) * q.pageSize,
       take: q.pageSize,
     }),
@@ -63,7 +72,12 @@ export async function patchKeyword(
     throw new AppError('INVALID_STATE', 'Keyword is being processed', { httpStatus: 409 });
   }
   const scope = siteScope(deps.prisma, kw.siteId);
-  await scope.keywords.updateById(kw.id, input);
+  // Recuperar una keyword descartada por similitud es una decisión del usuario: se respeta.
+  const override =
+    input.status === 'pending' && kw.discardReason
+      ? { discardReason: null, similarToArticleId: null, allowSimilar: true }
+      : {};
+  await scope.keywords.updateById(kw.id, { ...input, ...override });
   const updated = await scope.keywords.findById(kw.id);
   if (!updated) throw new AppError('INTERNAL_ERROR', 'Keyword vanished');
   return updated;
@@ -136,4 +150,38 @@ export async function batchKeywords(
     processed++;
   }
   return { processed, skipped: input.ids.length - processed };
+}
+
+/** Clusters temáticos del sitio con su pilar y su avance. */
+export async function listClusters(
+  deps: CoreDeps,
+  organizationId: string,
+  siteId: string,
+): Promise<ClusterDto[]> {
+  const site = await requireSite(deps.prisma, organizationId, siteId);
+  const clusters = await deps.prisma.keywordCluster.findMany({
+    where: { siteId: site.id },
+    orderBy: { name: 'asc' },
+    include: { keywords: { select: { id: true, term: true, status: true } } },
+  });
+  return clusters.map((c) => {
+    const pillar = c.keywords.find((k) => k.id === c.pillarKeywordId);
+    return {
+      id: c.id,
+      name: c.name,
+      pillar: pillar ? { keywordId: pillar.id, term: pillar.term, status: pillar.status } : null,
+      keywords: c.keywords.length,
+      done: c.keywords.filter((k) => k.status === 'done').length,
+    };
+  });
+}
+
+/** Reagrupa las keywords del sitio en clusters (trabajo `cluster`). */
+export async function rebuildClusters(
+  deps: CoreDeps,
+  organizationId: string,
+  siteId: string,
+): Promise<EnqueuedDto> {
+  const site = await requireSite(deps.prisma, organizationId, siteId);
+  return deps.dispatcher.enqueue('cluster', { siteId: site.id });
 }

@@ -9,7 +9,9 @@ x-app-env: &app-env
   JWT_SECRET: ${JWT_SECRET:-}
   ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
   ALLOW_PRIVATE_HOSTS: ${ALLOW_PRIVATE_HOSTS:-}
-  FREE_PLAN_MAX_ARTICLES: ${FREE_PLAN_MAX_ARTICLES:-10}
+  FREE_PLAN_MAX_ARTICLES: ${FREE_PLAN_MAX_ARTICLES:-3}
+  GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+  GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
 
 services:
   postgres:
@@ -70,6 +72,12 @@ services:
       ADMIN_EMAIL: ${ADMIN_EMAIL:-}
       COOKIE_SECURE: ${COOKIE_SECURE:-}
       LOGIN_RATE_LIMIT_MAX: ${LOGIN_RATE_LIMIT_MAX:-10}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_PRICE_STARTER: ${STRIPE_PRICE_STARTER:-}
+      STRIPE_PRICE_PRO: ${STRIPE_PRICE_PRO:-}
+      STRIPE_PRICE_AGENCY: ${STRIPE_PRICE_AGENCY:-}
+      STRIPE_AUTOMATIC_TAX: ${STRIPE_AUTOMATIC_TAX:-false}
     ports:
       - '${API_PORT:-3000}:3000'
     depends_on:
@@ -86,6 +94,8 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       DEFAULT_MODEL: ${DEFAULT_MODEL:-claude-sonnet-5}
       SERPAPI_KEY: ${SERPAPI_KEY:-}
+      DATAFORSEO_LOGIN: ${DATAFORSEO_LOGIN:-}
+      DATAFORSEO_PASSWORD: ${DATAFORSEO_PASSWORD:-}
       WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-2}
     depends_on:
       migrate: { condition: service_completed_successfully }
@@ -95,6 +105,8 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+      args:
+        PUBLIC_SITE_URL: ${PUBLIC_SITE_URL:-https://seoranker.tech}
     restart: unless-stopped
     environment:
       API_UPSTREAM: http://api:3000

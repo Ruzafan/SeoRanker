@@ -10,6 +10,7 @@ import type { EnqueueInput, JobDispatcher, PipelineJobType } from '../queue.js';
 import { requireSite, siteScope } from '../tenant.js';
 import type { PipelineContext } from './context.js';
 import { runPipelineJob } from './index.js';
+import { startFirstArticle } from './onboarding.js';
 import { assertQuota } from './quota.js';
 import { runScheduler } from './scheduler.js';
 import { runWatchdog } from './watchdog.js';
@@ -53,6 +54,7 @@ function fakeClaude(overrides: Partial<Record<string, () => unknown>> = {}): Cla
       profile: 'x'.repeat(250),
     }),
     'Submit the evaluation of every candidate keyword.': () => ({ keywords: [] }),
+    'Submit the topic clusters.': () => ({ clusters: [] }),
     ...overrides,
   };
   return {
@@ -72,11 +74,25 @@ function fakeAdapter(): PublishingAdapter & { created: unknown[] } {
       { id: 1, title: 'Página OK', url: 'https://tienda.es/ok', type: 'page' },
     ],
     getSamples: async () => [{ title: 't', body: 'b'.repeat(200), type: 'post' }],
+    listCategories: async () => ['Figuras de resina'],
     createPost: async (input) => {
       created.push(input);
       return { id: 500, url: 'https://tienda.es/post-500', warnings: [] };
     },
     updatePost: async () => ({ warnings: [] }),
+    searchProducts: async () => [
+      {
+        id: 12,
+        name: 'Vitrina LED',
+        url: 'https://tienda.es/vitrina',
+        price: '59,90 EUR',
+        imageId: 301,
+      },
+      { id: 13, name: 'Peana', url: 'https://tienda.es/peana', price: null, imageId: null },
+    ],
+    listAuthors: async () => [{ id: 7, name: 'Ana' }],
+    getPostsInfo: async () => [],
+    listAttributedOrders: async () => null,
   };
 }
 
@@ -172,6 +188,100 @@ describe.skipIf(!db)('pipeline (integración con Postgres)', () => {
     const usage = await prisma.usageRecord.findFirstOrThrow({ where: { siteId } });
     expect(usage).toMatchObject({ articles: 1, inputTokens: 2000, outputTokens: 1000 });
     expect(usage.costCents).toBeGreaterThan(0);
+  });
+
+  it('calidad: SERP en el esquema, tarjeta de producto, imagen destacada, autor y JSON-LD FAQ', async () => {
+    await prisma.site.update({
+      where: { id: siteId },
+      data: { settings: { ...DEFAULT_SETTINGS, wordCount: 300, authorId: 7, seoPlugin: 'yoast' } },
+    });
+    const kw = await newKeyword();
+    const html =
+      '<h2>Intro</h2><p>' +
+      'palabra '.repeat(300) +
+      '</p><p>La vitrina LED protege del polvo.</p><p>[[product:12]]</p><p>[[product:999]]</p>' +
+      '<h2>Preguntas frecuentes</h2><h3>¿Cuánto polvo?</h3><p>Poco si está cerrada.</p><h3>¿Luz?</h3><p>LED de bajo consumo.</p>';
+    const claude = fakeClaude({
+      'Submit the finished article body as HTML.': () => ({ contentHtml: html }),
+    });
+    const fetchFn = vi.fn(async (u: string | URL | Request) =>
+      String(u).startsWith('https://serpapi.com')
+        ? new Response(
+            JSON.stringify({
+              organic_results: [
+                { position: 1, title: 'Guía rival', link: 'https://rival.es/g', snippet: 's' },
+              ],
+              related_questions: [{ question: '¿Qué vitrina comprar?' }],
+            }),
+          )
+        : new Response('<h2>Qué es una figura</h2><p>texto</p>', {
+            headers: { 'content-type': 'text/html' },
+          }),
+    );
+    const ctx = {
+      ...ctxWith(claude),
+      fetchFn: fetchFn as unknown as typeof fetch,
+      config: { ...ctxWith().config, serpApiKey: 'serp-key' },
+    };
+    await dispatcher.enqueue('outline', { siteId, refId: kw.id, chain: 'publish' });
+    await drain(ctx);
+
+    const outlineCall = (claude.callTool as ReturnType<typeof vi.fn>).mock.calls.find(
+      (c) =>
+        (c[0] as { toolDescription: string }).toolDescription === 'Submit the article outline.',
+    )?.[0] as { user: string };
+    expect(outlineCall.user).toContain('Guía rival');
+    expect(outlineCall.user).toContain('- Qué es una figura');
+    expect(outlineCall.user).toContain('¿Qué vitrina comprar?');
+    const writeCall = (claude.callTool as ReturnType<typeof vi.fn>).mock.calls.find(
+      (c) =>
+        (c[0] as { toolDescription: string }).toolDescription ===
+        'Submit the finished article body as HTML.',
+    )?.[0] as { user: string };
+    expect(writeCall.user).toContain('ID 12: Vitrina LED (59,90 EUR)');
+
+    const article = await prisma.article.findFirstOrThrow({ where: { siteId } });
+    expect(article.serp).toMatchObject({
+      query: 'figuras de acción',
+      results: [{ title: 'Guía rival' }],
+    });
+    expect(article.contentHtml).toContain('[products ids="12" columns="1"]');
+    expect(article.contentHtml).not.toContain('999');
+    expect(article.featuredMediaId).toBe(301);
+
+    const sent = adapter.created[0] as {
+      authorId: number;
+      featuredMediaId: number;
+      seo: { schemaJson: string };
+    };
+    expect(sent).toMatchObject({ authorId: 7, featuredMediaId: 301 });
+    const schema = JSON.parse(sent.seo.schemaJson);
+    // Con Yoast activo no se duplica Article: solo el FAQ visible.
+    expect(schema['@graph'].map((n: { '@type': string }) => n['@type'])).toEqual(['FAQPage']);
+    expect(schema['@graph'][0].mainEntity[0].name).toBe('¿Cuánto polvo?');
+  });
+
+  it('el estado elegido al enviar manda sobre los ajustes (publicar ya o borrador)', async () => {
+    const kw = await newKeyword();
+    const ctx = ctxWith();
+    await dispatcher.enqueue('outline', { siteId, refId: kw.id, chain: 'ready' });
+    await drain(ctx);
+    const article = await prisma.article.findFirstOrThrow({ where: { siteId } });
+    // autoPublish=false en el sitio, pero el usuario pide publicar.
+    await dispatcher.enqueue('publish', { siteId, refId: article.id, wpStatus: 'publish' });
+    const job = dispatcher.queue.shift()!;
+    await runPipelineJob(ctx, 'publish', {
+      jobRunId: job.jobRunId,
+      siteId,
+      refId: article.id,
+      wpStatus: job.input.wpStatus,
+      attempt: 1,
+      maxAttempts: 3,
+    });
+    expect(adapter.created[0]).toMatchObject({ status: 'publish' });
+    expect(
+      (await prisma.article.findUniqueOrThrow({ where: { id: article.id } })).remoteStatus,
+    ).toBe('publish');
   });
 
   it('con chain=ready se detiene en ready (no publica)', async () => {
@@ -301,20 +411,73 @@ describe.skipIf(!db)('pipeline (integración con Postgres)', () => {
     });
   });
 
+  it('alta guiada: el primer discover redacta el primer artículo (hasta ready) y solo una vez', async () => {
+    await prisma.site.update({
+      where: { id: siteId },
+      data: { settings: { ...DEFAULT_SETTINGS, seeds: ['figuras'], onboarding: 'pending' } },
+    });
+    const fetchFn = vi.fn(
+      async () => new Response(JSON.stringify(['q', ['figuras de resina', 'figuras baratas']])),
+    );
+    const claude = fakeClaude({
+      'Submit the evaluation of every candidate keyword.': () => ({
+        keywords: [
+          { term: 'figuras de resina', keep: true, score: 90, intent: 'commercial' },
+          { term: 'figuras baratas', keep: true, score: 40, intent: 'transactional' },
+        ],
+      }),
+    });
+    const ctx = { ...ctxWith(claude), fetchFn: fetchFn as unknown as typeof fetch };
+    await dispatcher.enqueue('discover', { siteId });
+    await drain(ctx);
+
+    const article = await prisma.article.findFirstOrThrow({ where: { siteId } });
+    expect(article.status).toBe('ready'); // borrador para revisar: no se publica solo
+    const kw = await prisma.keyword.findUniqueOrThrow({ where: { id: article.keywordId! } });
+    expect(kw.term).toBe('figuras de resina'); // la de mayor puntuación
+    const site = await prisma.site.findUniqueOrThrow({ where: { id: siteId } });
+    expect(site.settings).toMatchObject({ onboarding: 'done', seeds: ['figuras'] });
+    const discover = await prisma.jobRun.findFirstOrThrow({ where: { siteId, type: 'discover' } });
+    expect(discover.meta).toMatchObject({ firstArticle: { started: true, keywordId: kw.id } });
+
+    // Un segundo discover ya no genera nada por su cuenta.
+    await dispatcher.enqueue('discover', { siteId });
+    await drain(ctx);
+    expect(await prisma.article.count({ where: { siteId } })).toBe(1);
+  });
+
+  it('alta guiada sin cuota disponible: no encola y deja la keyword pendiente', async () => {
+    await prisma.site.update({
+      where: { id: siteId },
+      data: { settings: { ...DEFAULT_SETTINGS, onboarding: 'pending' } },
+    });
+    await prisma.usageRecord.create({
+      data: { siteId, period: new Date().toISOString().slice(0, 7), articles: 2 },
+    });
+    const kw = await newKeyword('figuras de resina', 'pending', 90);
+    const res = await startFirstArticle(ctxWith(), siteId);
+    expect(res).toEqual({ started: false, reason: 'QUOTA_EXCEEDED' });
+    expect((await prisma.keyword.findUniqueOrThrow({ where: { id: kw.id } })).status).toBe(
+      'pending',
+    );
+    expect(dispatcher.queue).toHaveLength(0);
+  });
+
   it('discover tolera intent/score raros de Claude: normaliza en vez de fallar el lote', async () => {
     await prisma.site.update({
       where: { id: siteId },
       data: { settings: { ...DEFAULT_SETTINGS, seeds: ['figuras'] } },
     });
     const fetchFn = vi.fn(
-      async () => new Response(JSON.stringify(['q', ['figuras a', 'figuras b', 'figuras c']])),
+      async () =>
+        new Response(JSON.stringify(['q', ['figuras anime', 'figuras marvel', 'figuras disney']])),
     );
     const claude = fakeClaude({
       'Submit the evaluation of every candidate keyword.': () => ({
         keywords: [
-          { term: 'figuras a', keep: true, score: 150.6, intent: 'navigational' },
-          { term: 'figuras b', keep: true, score: -3, intent: 'Commercial' },
-          { term: 'figuras c', keep: true, score: 40, intent: '' },
+          { term: 'figuras anime', keep: true, score: 150.6, intent: 'navigational' },
+          { term: 'figuras marvel', keep: true, score: -3, intent: 'Commercial' },
+          { term: 'figuras disney', keep: true, score: 40, intent: '' },
         ],
       }),
     });
@@ -324,12 +487,43 @@ describe.skipIf(!db)('pipeline (integración con Postgres)', () => {
     const by = Object.fromEntries(
       (await prisma.keyword.findMany({ where: { siteId } })).map((k) => [k.term, k]),
     );
-    expect(by['figuras a']).toMatchObject({ score: 100, intent: null });
-    expect(by['figuras b']).toMatchObject({ score: 0, intent: 'commercial' });
-    expect(by['figuras c']).toMatchObject({ score: 40, intent: null });
+    expect(by['figuras anime']).toMatchObject({ score: 100, intent: null });
+    expect(by['figuras marvel']).toMatchObject({ score: 0, intent: 'commercial' });
+    expect(by['figuras disney']).toMatchObject({ score: 40, intent: null });
   });
 
-  it('discover sin seeds falla con NO_SEEDS', async () => {
+  it('discover sin seeds las deduce del contenido, las guarda y sigue', async () => {
+    const fetchFn = vi.fn(
+      async () => new Response(JSON.stringify(['q', ['figuras de resina baratas']])),
+    );
+    const claude = fakeClaude({
+      'Submit the seed keywords that describe the store.': () => ({
+        seeds: [
+          { term: 'Figuras de Resina', reason: 'categoría principal' },
+          { term: 'figuras de resina', reason: 'duplicada' },
+          { term: 'dioramas', reason: 'productos' },
+        ],
+      }),
+      'Submit the evaluation of every candidate keyword.': () => ({
+        keywords: [
+          { term: 'figuras de resina baratas', keep: true, score: 70, intent: 'commercial' },
+        ],
+      }),
+    });
+    const ctx = { ...ctxWith(claude), fetchFn: fetchFn as unknown as typeof fetch };
+    await dispatcher.enqueue('discover', { siteId });
+    await drain(ctx);
+
+    const site = await prisma.site.findUniqueOrThrow({ where: { id: siteId } });
+    expect((site.settings as { seeds: string[] }).seeds).toEqual(['figuras de resina', 'dioramas']);
+    expect(await prisma.keyword.count({ where: { siteId } })).toBe(1);
+    const run = await prisma.jobRun.findFirstOrThrow({ where: { siteId, type: 'discover' } });
+    expect(run).toMatchObject({ status: 'succeeded', meta: { seedsGenerated: true, seeds: 2 } });
+  });
+
+  it('discover sin seeds ni contenido publicado falla con NO_SEEDS', async () => {
+    adapter.listContent = async () => [];
+    adapter.listCategories = async () => [];
     await dispatcher.enqueue('discover', { siteId });
     await expect(drain(ctxWith())).rejects.toMatchObject({ code: 'NO_SEEDS' });
   });
@@ -439,7 +633,7 @@ describe.skipIf(!db)('pipeline (integración con Postgres)', () => {
       expect((await runScheduler(ctx, tomorrow)).generated).toBe(1);
     });
 
-    it('cadencia off no hace nada; sin keywords ni seeds tampoco', async () => {
+    it('cadencia off no hace nada; sin keywords ni seeds lanza discover (las deduce)', async () => {
       await newKeyword('x', 'pending');
       expect((await runScheduler(ctxWith())).generated).toBe(0);
       await prisma.site.update({
@@ -447,7 +641,8 @@ describe.skipIf(!db)('pipeline (integración con Postgres)', () => {
         data: { settings: { ...DEFAULT_SETTINGS, cadence: 'daily' } },
       });
       await prisma.keyword.deleteMany({ where: { siteId } });
-      expect(await runScheduler(ctxWith())).toMatchObject({ generated: 0, discovered: 0 });
+      expect(await runScheduler(ctxWith())).toMatchObject({ generated: 0, discovered: 1 });
+      expect(dispatcher.queue.map((j) => j.type)).toEqual(['discover']);
     });
   });
 
@@ -462,14 +657,24 @@ describe.skipIf(!db)('pipeline (integración con Postgres)', () => {
         code: 'QUOTA_EXCEEDED',
       });
     });
-    it('otros planes no tienen tope', async () => {
+    it('cada plan de pago tiene su propio tope (pro 100, agency 400)', async () => {
+      const cfg = { freePlanMaxArticles: 2 };
       await prisma.organization.update({ where: { id: orgId }, data: { plan: 'pro' } });
       await prisma.usageRecord.create({
-        data: { siteId, period: new Date().toISOString().slice(0, 7), articles: 999 },
+        data: { siteId, period: new Date().toISOString().slice(0, 7), articles: 99 },
       });
-      await expect(
-        assertQuota(prisma, siteId, 'generate_article', { freePlanMaxArticles: 2 }),
-      ).resolves.toBeUndefined();
+      await expect(assertQuota(prisma, siteId, 'generate_article', cfg)).resolves.toBeUndefined();
+      await prisma.usageRecord.updateMany({ where: { siteId }, data: { articles: 100 } });
+      await expect(assertQuota(prisma, siteId, 'generate_article', cfg)).rejects.toMatchObject({
+        code: 'QUOTA_EXCEEDED',
+      });
+      await prisma.organization.update({ where: { id: orgId }, data: { plan: 'agency' } });
+      await prisma.usageRecord.updateMany({ where: { siteId }, data: { articles: 399 } });
+      await expect(assertQuota(prisma, siteId, 'generate_article', cfg)).resolves.toBeUndefined();
+      await prisma.usageRecord.updateMany({ where: { siteId }, data: { articles: 400 } });
+      await expect(assertQuota(prisma, siteId, 'generate_article', cfg)).rejects.toMatchObject({
+        code: 'QUOTA_EXCEEDED',
+      });
     });
   });
 

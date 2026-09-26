@@ -35,9 +35,10 @@ export function formatDuration(ms: number | null): string {
 export const isJobActive = (j: Pick<JobRunDto, 'status'>): boolean =>
   j.status === 'queued' || j.status === 'running';
 
-/** Snippet para que Yoast exponga sus campos por REST (functions.php). */
+/** Alternativa al conector: expone por REST los campos de Yoast y Rank Math (functions.php). */
 export const YOAST_SNIPPET = `add_action('init', function () {
-  foreach (['_yoast_wpseo_focuskw', '_yoast_wpseo_metadesc', '_yoast_wpseo_title'] as $key) {
+  foreach (['_yoast_wpseo_focuskw', '_yoast_wpseo_metadesc', '_yoast_wpseo_title',
+            'rank_math_focus_keyword', 'rank_math_description', 'rank_math_title'] as $key) {
     register_post_meta('post', $key, [
       'show_in_rest'  => true,
       'single'        => true,

@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@seo/db';
 import type { PublishingAdapter } from '../adapters/index.js';
 import type { ClaudeClient } from '../ai/claude.js';
+import type { GoogleConfig } from '../integrations/google.js';
 import type { JobDispatcher } from '../queue.js';
 
 export interface Logger {
@@ -15,6 +16,10 @@ export interface PipelineConfig {
   /** Tope mensual de artículos del plan free. */
   freePlanMaxArticles: number;
   allowPrivateHosts: boolean;
+  /** OAuth de Google (Search Console); sin él, `sync` se salta Search Console. */
+  google?: GoogleConfig | undefined;
+  /** Volumen/dificultad de keywords (DataForSEO); sin él las keywords no tienen métricas de mercado. */
+  dataForSeo?: { login: string; password: string } | undefined;
 }
 
 export interface PipelineContext {
@@ -37,6 +42,8 @@ export interface RunInfo {
   siteId: string;
   refId?: string | undefined;
   chain?: 'ready' | 'publish' | undefined;
+  /** Estado en WordPress elegido al enviar a mano; sin él, lo deciden los ajustes del sitio. */
+  wpStatus?: 'publish' | 'draft' | undefined;
   attempt: number;
   maxAttempts: number;
 }

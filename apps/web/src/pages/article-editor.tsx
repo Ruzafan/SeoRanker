@@ -14,7 +14,6 @@ import {
   cx,
   inputClass,
 } from '../components/ui';
-import { YOAST_SNIPPET } from '../lib/format';
 import {
   useArticle,
   useDeleteArticle,
@@ -26,6 +25,8 @@ import {
   withToast,
 } from '../lib/hooks';
 import { articleStatusLabel, errorText, parseJobError, warningMessages } from '../lib/i18n';
+import { OnPagePanel, SerpPanel } from '../components/onpage-panel';
+import { WorkflowPanel } from '../components/workflow-panel';
 
 const TITLE_MAX = 60;
 const META_MAX = 155;
@@ -46,7 +47,15 @@ function Counter({ value, max }: { value: number; max: number }) {
 }
 
 const PREVIEW_STYLES =
-  '<style>body{font:16px/1.65 system-ui,sans-serif;max-width:42rem;margin:1rem auto;padding:0 1rem;color:#1c1917}h2{margin-top:1.8em}a{color:#0f766e}</style>';
+  '<style>body{font:16px/1.65 system-ui,sans-serif;max-width:42rem;margin:1rem auto;padding:0 1rem;color:#1c1917}h2{margin-top:1.8em}a{color:#0f766e}table{border-collapse:collapse;width:100%}th,td{border:1px solid #d6d3d1;padding:.4em .6em;text-align:left}.product{border:1px dashed #0d9488;border-radius:.5rem;padding:.8em 1em;color:#115e59;background:#f0fdfa;margin:1em 0}</style>';
+
+/** En la vista previa, el shortcode de WooCommerce se muestra como un hueco de tarjeta. */
+function previewHtml(html: string): string {
+  return html.replace(
+    /\[products ids="(\d+)"[^\]]*\]/g,
+    '<div class="product">🛒 Tarjeta del producto #$1 (precio y botón de compra en tu tienda)</div>',
+  );
+}
 
 export function ArticleEditorPage() {
   const { siteId = '', articleId = '' } = useParams();
@@ -63,7 +72,7 @@ export function ArticleEditorPage() {
   const [title, setTitle] = useState('');
   const [meta, setMeta] = useState('');
   const [html, setHtml] = useState('');
-  const [tab, setTab] = useState<'html' | 'preview'>('html');
+  const [tab, setTab] = useState<'html' | 'preview'>('preview');
   const [dirty, setDirty] = useState(false);
 
   // Carga los datos del servidor salvo que haya ediciones sin guardar (el polling no debe pisarlas).
@@ -103,10 +112,14 @@ export function ArticleEditorPage() {
     return !!res;
   };
 
-  const onPublish = async () => {
+  const onPublish = async (status: 'publish' | 'draft') => {
     if (dirty && !(await save())) return;
-    await withToast(publish.mutateAsync(), 'Enviando a WordPress…');
+    await withToast(
+      publish.mutateAsync(status),
+      status === 'publish' ? 'Publicando en WordPress…' : 'Guardando como borrador en WordPress…',
+    );
   };
+  const live = article.remoteStatus === 'publish';
 
   const set =
     <T,>(setter: (v: T) => void) =>
@@ -115,28 +128,72 @@ export function ArticleEditorPage() {
       setDirty(true);
     };
 
+  const remove = () => {
+    if (!window.confirm('¿Eliminar este artículo? No se borra de WordPress.')) return;
+    del.mutate(undefined, {
+      onSuccess: () => {
+        toast.success('Artículo eliminado');
+        navigate(listPath);
+      },
+      onError: (e) => toast.error(errorText(e)),
+    });
+  };
+
   return (
     <>
-      <Link
-        to={listPath}
-        className="mb-4 inline-flex items-center gap-1 text-sm text-stone-600 hover:underline dark:text-stone-400"
-      >
-        <ArrowLeft className="h-4 w-4" /> Artículos
-      </Link>
-
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <StatusBadge status={article.status} label={articleStatusLabel[article.status]} />
-        {article.wordCount > 0 && <Badge>{article.wordCount} palabras</Badge>}
-        {article.remoteUrl && (
-          <a
-            href={article.remoteUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1 text-sm text-teal-700 hover:underline dark:text-teal-400"
+      {/* Barra de acciones fija: lo importante siempre a mano, sin bajar hasta el final. */}
+      <div className="sticky top-14 z-10 -mx-4 mb-4 border-b border-stone-200 bg-stone-50/95 px-4 py-3 backdrop-blur dark:border-stone-800 dark:bg-stone-950/95">
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            to={listPath}
+            className="inline-flex items-center gap-1 text-sm text-stone-600 hover:underline dark:text-stone-400"
           >
-            Ver en WordPress <ExternalLink className="h-3.5 w-3.5" />
-          </a>
-        )}
+            <ArrowLeft className="h-4 w-4" /> Artículos
+          </Link>
+          <StatusBadge status={article.status} label={articleStatusLabel[article.status]} />
+          {article.wordCount > 0 && <Badge>{article.wordCount} palabras</Badge>}
+          {article.remoteUrl && (
+            <a
+              href={article.remoteUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-sm text-teal-700 hover:underline dark:text-teal-400"
+            >
+              Ver en WordPress <ExternalLink className="h-3.5 w-3.5" />
+            </a>
+          )}
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            {dirty && (
+              <Button
+                icon={Save}
+                variant="secondary"
+                disabled={busy}
+                loading={patch.isPending}
+                onClick={() => void save()}
+              >
+                Guardar cambios
+              </Button>
+            )}
+            {!live && (
+              <Button
+                variant="secondary"
+                disabled={busy || !html}
+                loading={publish.isPending && publish.variables === 'draft'}
+                onClick={() => void onPublish('draft')}
+              >
+                {article.remotePostId ? 'Actualizar borrador' : 'Guardar como borrador'}
+              </Button>
+            )}
+            <Button
+              icon={Send}
+              disabled={busy || !html}
+              loading={publish.isPending && publish.variables === 'publish'}
+              onClick={() => void onPublish('publish')}
+            >
+              {live ? 'Actualizar publicado' : 'Publicar ahora'}
+            </Button>
+          </div>
+        </div>
       </div>
 
       {busy && (
@@ -161,136 +218,131 @@ export function ArticleEditorPage() {
       {yoastWarn && (
         <div className="mb-4">
           <Notice title={warningMessages.YOAST_META_NOT_EXPOSED}>
-            <p className="mb-2">
-              Pega este fragmento en el <code>functions.php</code> de tu tema (o en un plugin de
-              snippets) y vuelve a publicar:
-            </p>
-            <pre className="overflow-x-auto rounded bg-white/70 p-2 text-[11px] leading-snug dark:bg-black/30">
-              {YOAST_SNIPPET}
-            </pre>
-            <p className="mt-2">
-              Mientras tanto, la meta description se ha guardado como extracto del post.
+            <p>
+              Instala el{' '}
+              <Link to={`/sites/${siteId}/settings`} className="font-medium underline">
+                conector de WordPress
+              </Link>{' '}
+              (un clic, sin tocar código) y vuelve a publicar. Mientras tanto, la meta description
+              se ha guardado como extracto del post.
             </p>
           </Notice>
         </div>
       )}
 
-      <Card className="space-y-4">
-        <Field label="Título (H1)" error={undefined}>
-          <input
-            className={inputClass}
-            value={title}
-            disabled={busy}
-            onChange={(e) => set(setTitle)(e.target.value)}
-          />
-          <Counter value={title.length} max={TITLE_MAX} />
-        </Field>
-        <Field label="Meta description">
-          <textarea
-            className={cx(inputClass, 'min-h-20')}
-            value={meta}
-            disabled={busy}
-            onChange={(e) => set(setMeta)(e.target.value)}
-          />
-          <Counter value={meta.length} max={META_MAX} />
-        </Field>
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_19rem]">
+        <div className="min-w-0 space-y-4">
+          <Card className="space-y-4">
+            <Field label="Título (H1)" error={undefined}>
+              <input
+                className={cx(inputClass, 'text-base font-medium')}
+                value={title}
+                disabled={busy}
+                onChange={(e) => set(setTitle)(e.target.value)}
+              />
+              <Counter value={title.length} max={TITLE_MAX} />
+            </Field>
+            <Field label="Meta description">
+              <textarea
+                className={cx(inputClass, 'min-h-20')}
+                value={meta}
+                disabled={busy}
+                onChange={(e) => set(setMeta)(e.target.value)}
+              />
+              <Counter value={meta.length} max={META_MAX} />
+            </Field>
 
-        <div>
-          <div className="mb-2 flex items-center gap-1 border-b border-stone-200 dark:border-stone-800">
-            {(['html', 'preview'] as const).map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setTab(t)}
-                className={cx(
-                  '-mb-px border-b-2 px-3 py-2 text-sm font-medium',
-                  tab === t
-                    ? 'border-teal-600 text-teal-800 dark:text-teal-300'
-                    : 'border-transparent text-stone-500 hover:text-stone-800',
-                )}
+            <div>
+              <div
+                role="tablist"
+                className="mb-2 flex items-center gap-1 border-b border-stone-200 dark:border-stone-800"
               >
-                {t === 'html' ? 'HTML' : 'Vista previa'}
-              </button>
-            ))}
-          </div>
-          {tab === 'html' ? (
-            <textarea
-              className={cx(inputClass, 'min-h-[28rem] font-mono text-xs leading-relaxed')}
-              value={html}
-              disabled={busy}
-              spellCheck={false}
-              onChange={(e) => set(setHtml)(e.target.value)}
-              placeholder={
-                busy ? 'Redactando…' : 'El contenido aparecerá aquí cuando esté redactado.'
-              }
-            />
-          ) : (
-            <iframe
-              title="Vista previa del artículo"
-              sandbox=""
-              srcDoc={`${PREVIEW_STYLES}<h1>${escapeHtml(title)}</h1>${html}`}
-              className="h-[28rem] w-full rounded-lg border border-stone-200 bg-white dark:border-stone-700"
-            />
-          )}
+                {(['preview', 'html'] as const).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    role="tab"
+                    aria-selected={tab === t}
+                    onClick={() => setTab(t)}
+                    className={cx(
+                      '-mb-px border-b-2 px-3 py-2 text-sm font-medium',
+                      tab === t
+                        ? 'border-teal-600 text-teal-800 dark:text-teal-300'
+                        : 'border-transparent text-stone-500 hover:text-stone-800 dark:hover:text-stone-200',
+                    )}
+                  >
+                    {t === 'html' ? 'Editar HTML' : 'Vista previa'}
+                  </button>
+                ))}
+              </div>
+              {tab === 'html' ? (
+                <textarea
+                  className={cx(inputClass, 'min-h-[36rem] font-mono text-xs leading-relaxed')}
+                  value={html}
+                  disabled={busy}
+                  spellCheck={false}
+                  onChange={(e) => set(setHtml)(e.target.value)}
+                  placeholder={
+                    busy ? 'Redactando…' : 'El contenido aparecerá aquí cuando esté redactado.'
+                  }
+                />
+              ) : (
+                <iframe
+                  title="Vista previa del artículo"
+                  sandbox=""
+                  srcDoc={`${PREVIEW_STYLES}<h1>${escapeHtml(title)}</h1>${previewHtml(html)}`}
+                  className="h-[36rem] w-full rounded-lg border border-stone-200 bg-white dark:border-stone-700"
+                />
+              )}
+            </div>
+          </Card>
+          <p className="text-xs text-stone-500">
+            «Publicar ahora» lo deja visible en tu web; «Guardar como borrador» lo deja en WordPress
+            para revisarlo allí. Lo que genera la automatización sale{' '}
+            {site?.settings.autoPublish ? 'publicado' : 'como borrador'} (se cambia en Ajustes).
+          </p>
         </div>
-      </Card>
 
-      <div className="mt-4 flex flex-wrap items-center gap-2">
-        <Button
-          icon={Save}
-          variant="secondary"
-          disabled={!dirty || busy}
-          loading={patch.isPending}
-          onClick={() => void save()}
-        >
-          Guardar cambios
-        </Button>
-        <Button
-          icon={Send}
-          disabled={busy || !html}
-          loading={publish.isPending}
-          onClick={() => void onPublish()}
-        >
-          {article.remotePostId ? 'Actualizar en WordPress' : 'Enviar a WordPress'}
-        </Button>
-        <Button
-          icon={RefreshCw}
-          variant="secondary"
-          disabled={busy}
-          loading={regenerate.isPending}
-          onClick={() =>
-            window.confirm(
-              'Se descartará el texto actual y Claude lo escribirá de nuevo. ¿Continuar?',
-            ) &&
-            void withToast(regenerate.mutateAsync(), 'Regenerando…').then(() => setDirty(false))
-          }
-        >
-          Regenerar
-        </Button>
-        <Button
-          icon={Trash2}
-          variant="ghost"
-          className="ml-auto text-red-700 dark:text-red-400"
-          disabled={busy}
-          onClick={() => {
-            if (!window.confirm('¿Eliminar este artículo? No se borra de WordPress.')) return;
-            del.mutate(undefined, {
-              onSuccess: () => {
-                toast.success('Artículo eliminado');
-                navigate(listPath);
-              },
-              onError: (e) => toast.error(errorText(e)),
-            });
-          }}
-        >
-          Eliminar
-        </Button>
+        <aside className="min-w-0 space-y-4">
+          <OnPagePanel
+            keyword={article.keyword}
+            title={title}
+            meta={meta}
+            slug={article.slug}
+            html={html}
+            targetWords={site?.settings.wordCount ?? 1200}
+          />
+          <WorkflowPanel siteId={siteId} article={article} />
+          {article.serp && <SerpPanel serp={article.serp} />}
+          <Card className="space-y-2">
+            <h2 className="text-sm font-medium">Más acciones</h2>
+            <Button
+              icon={RefreshCw}
+              variant="secondary"
+              className="w-full"
+              disabled={busy}
+              loading={regenerate.isPending}
+              onClick={() =>
+                window.confirm(
+                  'Se descartará el texto actual y Claude lo escribirá de nuevo. ¿Continuar?',
+                ) &&
+                void withToast(regenerate.mutateAsync(), 'Regenerando…').then(() => setDirty(false))
+              }
+            >
+              Regenerar con IA
+            </Button>
+            <Button
+              icon={Trash2}
+              variant="ghost"
+              className="w-full text-red-700 dark:text-red-400"
+              disabled={busy}
+              onClick={remove}
+            >
+              Eliminar artículo
+            </Button>
+          </Card>
+        </aside>
       </div>
-      <p className="mt-3 text-xs text-stone-500">
-        {site?.settings.autoPublish
-          ? 'Publicación automática activada: se publicará directamente.'
-          : 'Se enviará a WordPress como borrador; publícalo desde allí cuando quieras.'}
-      </p>
     </>
   );
 }

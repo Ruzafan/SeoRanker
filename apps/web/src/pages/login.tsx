@@ -18,7 +18,7 @@ function LoginForm() {
   return (
     <form
       className="space-y-4"
-      onSubmit={handleSubmit((v) => login.mutate(v, { onSuccess: () => navigate('/') }))}
+      onSubmit={handleSubmit((v) => login.mutate(v, { onSuccess: () => navigate('/app') }))}
     >
       <Field label="Email" error={errors.email?.message}>
         <input type="email" autoComplete="username" className={inputClass} {...register('email')} />
@@ -49,7 +49,7 @@ function RegisterForm() {
   return (
     <form
       className="space-y-4"
-      onSubmit={handleSubmit((v) => reg.mutate(v, { onSuccess: () => navigate('/') }))}
+      onSubmit={handleSubmit((v) => reg.mutate(v, { onSuccess: () => navigate('/app') }))}
     >
       <Field label="Email" error={errors.email?.message}>
         <input type="email" autoComplete="username" className={inputClass} {...register('email')} />
@@ -80,7 +80,7 @@ export function LoginPage() {
   const { data: me } = useMe();
   const { data: config } = useAuthConfig();
   const [mode, setMode] = useState<'login' | 'register'>('login');
-  if (me) return <Navigate to="/" replace />;
+  if (me) return <Navigate to="/app" replace />;
   const canRegister = config?.registrationOpen === true;
 
   return (

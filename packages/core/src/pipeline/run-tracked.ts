@@ -50,6 +50,11 @@ export async function runTracked(
     });
   } catch (err) {
     const willRetry = isRetryable(err) && info.attempt < info.maxAttempts;
+    // Una llamada a Claude que falló tras responder (truncada, salida inválida) también se pagó.
+    if (err instanceof AppError && err.usage) {
+      const { model, ...tokens } = err.usage;
+      await tracker.add(model, tokens).catch(() => undefined);
+    }
     const message = `${errorCode(err)}: ${errorMessage(err)}`;
     ctx.log.error(
       {

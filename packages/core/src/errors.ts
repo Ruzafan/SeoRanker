@@ -6,6 +6,8 @@ export interface AppErrorOptions {
   httpStatus?: number;
   retryable?: boolean;
   cause?: unknown;
+  /** Consumo de una llamada a Claude que sí se cobró aunque el resultado no sirva. */
+  usage?: { model: string; inputTokens: number; outputTokens: number };
 }
 
 /** Error tipado. `code` es un código estable que el frontend traduce; nunca texto localizado. */
@@ -13,6 +15,7 @@ export class AppError extends Error {
   readonly code: ErrorCode;
   readonly httpStatus: number;
   readonly retryable: boolean;
+  readonly usage: AppErrorOptions['usage'];
 
   constructor(code: ErrorCode, message: string, options: AppErrorOptions = {}) {
     super(message, { cause: options.cause });
@@ -20,6 +23,7 @@ export class AppError extends Error {
     this.code = code;
     this.httpStatus = options.httpStatus ?? 500;
     this.retryable = options.retryable ?? false;
+    this.usage = options.usage;
   }
 }
 

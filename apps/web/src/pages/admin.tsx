@@ -8,7 +8,7 @@ export function AdminPage() {
   const { data: me, isLoading: meLoading } = useMe();
   const { data: orgs, isLoading, error } = useAdminOrgs(!!me?.isAdmin);
   if (meLoading) return <Spinner />;
-  if (!me?.isAdmin) return <Navigate to="/" replace />;
+  if (!me?.isAdmin) return <Navigate to="/app" replace />;
 
   return (
     <>

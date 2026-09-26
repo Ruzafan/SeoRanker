@@ -5,6 +5,22 @@ import type {
   ArticleDto,
   ArticleSummaryDto,
   BatchResultDto,
+  AiVisibilityDto,
+  BillingDto,
+  BrandingDto,
+  BrandingInput,
+  CommentDto,
+  InvitationInfoDto,
+  InvitationLinkDto,
+  MembersDto,
+  MonthlyReportDto,
+  ReviewInput,
+  ClusterDto,
+  CheckoutResultDto,
+  PaidPlanId,
+  PerformanceDto,
+  SearchConsolePropertyDto,
+  SearchConsoleStatusDto,
   ConnectionTestDto,
   CreateSiteInput,
   EnqueuedDto,
@@ -17,6 +33,7 @@ import type {
   PatchKeywordInput,
   RegisterInput,
   SiteDto,
+  SitesOverviewDto,
   SiteStatsDto,
   UpdateSiteInput,
   UsageDto,
@@ -76,6 +93,13 @@ export function useLogout() {
 export const useSites = () =>
   useQuery({ queryKey: ['sites'], queryFn: () => api.get<SiteDto[]>('/sites') });
 
+export const useSitesOverview = () =>
+  useQuery({
+    queryKey: ['sites-overview'],
+    queryFn: () => api.get<SitesOverviewDto>('/sites/overview'),
+    refetchInterval: 30_000,
+  });
+
 export const useSite = (siteId: string) =>
   useQuery({ queryKey: ['site', siteId], queryFn: () => api.get<SiteDto>(`/sites/${siteId}`) });
 
@@ -83,7 +107,10 @@ export function useCreateSite() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: CreateSiteInput) => api.post<SiteDto>('/sites', input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['sites'] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['sites'] });
+      void qc.invalidateQueries({ queryKey: ['sites-overview'] });
+    },
   });
 }
 
@@ -108,6 +135,15 @@ export function useDeleteSite(siteId: string) {
     },
   });
 }
+
+export const useAuthors = (siteId: string, enabled: boolean) =>
+  useQuery({
+    queryKey: ['site', siteId, 'authors'],
+    queryFn: () => api.get<{ id: number; name: string }[]>(`/sites/${siteId}/authors`),
+    enabled,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
 
 export const useTestConnection = (siteId: string) => {
   const qc = useQueryClient();
@@ -159,8 +195,10 @@ export function useRefreshWhenIdle(siteId: string) {
 // ---- Keywords --------------------------------------------------------------
 export interface KeywordFilters {
   status?: string;
+  source?: string;
+  clusterId?: string;
   search?: string;
-  sort: 'score' | 'createdAt' | 'term';
+  sort: 'score' | 'createdAt' | 'term' | 'volume' | 'gscImpressions';
   order: 'asc' | 'desc';
   page: number;
 }
@@ -183,6 +221,14 @@ function useSiteMutation<V, R>(siteId: string, fn: (v: V) => Promise<R>) {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['site', siteId] }),
   });
 }
+
+export const useClusters = (siteId: string) =>
+  useQuery({
+    queryKey: ['site', siteId, 'clusters'],
+    queryFn: () => api.get<ClusterDto[]>(`/sites/${siteId}/clusters`),
+  });
+export const useRebuildClusters = (siteId: string) =>
+  useSiteMutation(siteId, () => api.post<EnqueuedDto>(`/sites/${siteId}/clusters/rebuild`));
 
 export const useAddKeywords = (siteId: string) =>
   useSiteMutation(siteId, (terms: string[]) =>
@@ -246,11 +292,174 @@ export const usePatchArticle = (siteId: string, id: string) =>
     api.patch<ArticleDto>(`/articles/${id}`, patch),
   );
 export const usePublishArticle = (siteId: string, id: string) =>
-  useArticleMutation(siteId, id, () => api.post<EnqueuedDto>(`/articles/${id}/publish`));
+  useArticleMutation(siteId, id, (status?: 'publish' | 'draft') =>
+    api.post<EnqueuedDto>(`/articles/${id}/publish`, status ? { status } : {}),
+  );
 export const useRegenerateArticle = (siteId: string, id: string) =>
   useArticleMutation(siteId, id, () => api.post<EnqueuedDto>(`/articles/${id}/regenerate`));
 export const useDeleteArticle = (siteId: string, id: string) =>
   useArticleMutation(siteId, id, () => api.delete(`/articles/${id}`));
+
+// ---- Rendimiento y Search Console ----------------------------------------------
+export const usePerformance = (siteId: string) =>
+  useQuery({
+    queryKey: ['site', siteId, 'performance'],
+    queryFn: () => api.get<PerformanceDto>(`/sites/${siteId}/performance`),
+  });
+
+export const useAiVisibility = (siteId: string) =>
+  useQuery({
+    queryKey: ['site', siteId, 'ai-visibility'],
+    queryFn: () => api.get<AiVisibilityDto>(`/sites/${siteId}/ai-visibility`),
+  });
+export const useRunAiVisibility = (siteId: string) =>
+  useSiteMutation(siteId, () => api.post<EnqueuedDto>(`/sites/${siteId}/ai-visibility/run`));
+
+export const useConnectSearchConsole = (siteId: string) =>
+  useMutation({
+    mutationFn: () => api.post<{ url: string }>(`/sites/${siteId}/search-console/connect`),
+    onSuccess: (res) => window.location.assign(res.url),
+  });
+
+export const useSearchConsoleProperties = (siteId: string, enabled: boolean) =>
+  useQuery({
+    queryKey: ['site', siteId, 'gsc-properties'],
+    queryFn: () =>
+      api.get<SearchConsolePropertyDto[]>(`/sites/${siteId}/search-console/properties`),
+    enabled,
+  });
+
+export const useSelectProperty = (siteId: string) =>
+  useSiteMutation(siteId, (propertyUrl: string) =>
+    api.patch<SearchConsoleStatusDto>(`/sites/${siteId}/search-console`, { propertyUrl }),
+  );
+export const useDisconnectSearchConsole = (siteId: string) =>
+  useSiteMutation(siteId, () => api.delete(`/sites/${siteId}/search-console`));
+export const useSyncSite = (siteId: string) =>
+  useSiteMutation(siteId, () => api.post<EnqueuedDto>(`/sites/${siteId}/sync`));
+
+// ---- Facturación -------------------------------------------------------------
+export const useBilling = () =>
+  useQuery({ queryKey: ['billing'], queryFn: () => api.get<BillingDto>('/billing') });
+
+export function useCheckout() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (plan: PaidPlanId) => api.post<CheckoutResultDto>('/billing/checkout', { plan }),
+    onSuccess: (res) => {
+      if (res.url) window.location.assign(res.url);
+      else {
+        void qc.invalidateQueries({ queryKey: ['billing'] });
+        void qc.invalidateQueries({ queryKey: ['me'] });
+        void qc.invalidateQueries({ queryKey: ['sites-overview'] });
+      }
+    },
+  });
+}
+
+export const useBillingPortal = () =>
+  useMutation({
+    mutationFn: () => api.post<CheckoutResultDto>('/billing/portal'),
+    onSuccess: (res) => {
+      if (res.url) window.location.assign(res.url);
+    },
+  });
+
+// ---- Flujo editorial ---------------------------------------------------------
+export const useRefreshArticle = (siteId: string, id: string) =>
+  useArticleMutation(siteId, id, () => api.post<EnqueuedDto>(`/articles/${id}/refresh`));
+export const useRestoreArticle = (siteId: string, id: string) =>
+  useArticleMutation(siteId, id, () => api.post<ArticleDto>(`/articles/${id}/restore`));
+export const useReviewArticle = (siteId: string, id: string) => {
+  const qc = useQueryClient();
+  return useArticleMutation(siteId, id, async (input: ReviewInput) => {
+    const res = await api.post<ArticleDto>(`/articles/${id}/review`, input);
+    void qc.invalidateQueries({ queryKey: ['article', id, 'comments'] });
+    return res;
+  });
+};
+
+export const useComments = (id: string) =>
+  useQuery({
+    queryKey: ['article', id, 'comments'],
+    queryFn: () => api.get<CommentDto[]>(`/articles/${id}/comments`),
+  });
+export function useAddComment(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: string) => api.post<CommentDto[]>(`/articles/${id}/comments`, { body }),
+    onSuccess: (list) => qc.setQueryData(['article', id, 'comments'], list),
+  });
+}
+
+export const useCalendar = (siteId: string, from: string, to: string) =>
+  useQuery({
+    queryKey: ['site', siteId, 'calendar', from, to],
+    queryFn: () =>
+      api.get<{ items: ArticleSummaryDto[]; unscheduled: ArticleSummaryDto[] }>(
+        `/sites/${siteId}/calendar${qs({ from, to })}`,
+      ),
+  });
+export const useSchedule = (siteId: string) =>
+  useSiteMutation(siteId, (v: { id: string; scheduledFor: string | null }) =>
+    api.patch<ArticleDto>(`/articles/${v.id}`, { scheduledFor: v.scheduledFor }),
+  );
+
+export const useReport = (siteId: string, month: string) =>
+  useQuery({
+    queryKey: ['site', siteId, 'report', month],
+    queryFn: () => api.get<MonthlyReportDto>(`/sites/${siteId}/report${qs({ month })}`),
+  });
+
+// ---- Organización -------------------------------------------------------------
+export const useMembers = () =>
+  useQuery({ queryKey: ['members'], queryFn: () => api.get<MembersDto>('/organization/members') });
+
+function useOrgMutation<V, R>(fn: (v: V) => Promise<R>) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['members'] });
+      void qc.invalidateQueries({ queryKey: ['branding'] });
+    },
+  });
+}
+export const useInvite = () =>
+  useOrgMutation((v: { email: string; role: 'member' | 'viewer' }) =>
+    api.post<InvitationLinkDto>('/organization/invitations', v),
+  );
+export const useRevokeInvite = () =>
+  useOrgMutation((id: string) => api.delete(`/organization/invitations/${id}`));
+export const useChangeRole = () =>
+  useOrgMutation((v: { id: string; role: 'member' | 'viewer' }) =>
+    api.patch(`/organization/members/${v.id}`, { role: v.role }),
+  );
+export const useRemoveMember = () =>
+  useOrgMutation((id: string) => api.delete(`/organization/members/${id}`));
+
+export const useBranding = () =>
+  useQuery({
+    queryKey: ['branding'],
+    queryFn: () => api.get<BrandingDto>('/organization/branding'),
+  });
+export const useUpdateBranding = () =>
+  useOrgMutation((v: BrandingInput) => api.put<BrandingDto>('/organization/branding', v));
+
+export const useInvitation = (token: string) =>
+  useQuery({
+    queryKey: ['invitation', token],
+    queryFn: () => api.get<InvitationInfoDto>(`/auth/invitations/${token}`),
+    retry: false,
+  });
+export function useAcceptInvite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { token: string; password: string }) =>
+      api.post<UserDto>('/auth/accept-invite', v),
+    onSuccess: (u) => qc.setQueryData(['me'], u),
+  });
+}
 
 // ---- Admin -----------------------------------------------------------------
 export const useAdminOrgs = (enabled: boolean) =>

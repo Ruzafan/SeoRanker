@@ -1,7 +1,9 @@
 import type { Site } from '@seo/db';
 import {
   DEFAULT_SETTINGS,
+  PLATFORMS,
   parseSettings,
+  planFor,
   type ConnectionTestDto,
   type CreateSiteInput,
   type EnqueuedDto,
@@ -23,22 +25,57 @@ export async function createSite(
   organizationId: string,
   input: CreateSiteInput,
 ): Promise<Site> {
+  if (!PLATFORMS[input.platform].available) {
+    throw new AppError(
+      'PLATFORM_NOT_SUPPORTED',
+      `Platform ${input.platform} is not available yet`,
+      {
+        httpStatus: 400,
+      },
+    );
+  }
+  await assertSiteLimit(deps, organizationId);
   const url = normalizeSiteUrl(input.url, { allowPrivate: deps.config.allowPrivateHosts });
   const credentials: SiteCredentials = {
     username: input.wpUsername,
     appPassword: input.wpAppPassword,
   };
-  return deps.prisma.site.create({
+  const site = await deps.prisma.site.create({
     data: {
       organizationId,
       name: input.name,
       url,
+      platform: input.platform,
       language: input.language,
       country: input.country,
       credentials: encryptJson(deps.encryptionKey, credentials),
-      settings: DEFAULT_SETTINGS as never,
+      settings: { ...DEFAULT_SETTINGS, onboarding: 'pending' } as never,
     },
   });
+  // Primer resultado cuanto antes: voz de marca y keywords ya; al acabar discover se redacta el
+  // primer artículo (ver pipeline/onboarding.ts). Si la cola no está disponible, el alta sigue siendo
+  // válida y el usuario puede lanzarlo a mano.
+  try {
+    await deps.dispatcher.enqueue('brand-voice', { siteId: site.id });
+    await deps.dispatcher.enqueue('discover', { siteId: site.id });
+  } catch {
+    // CONNECTION_FAILED al encolar: ya quedó anotado en el JobRun.
+  }
+  return site;
+}
+
+/** Lanza PLAN_SITE_LIMIT si el plan de la organización no admite otra tienda. */
+async function assertSiteLimit(deps: CoreDeps, organizationId: string): Promise<void> {
+  const org = await deps.prisma.organization.findUniqueOrThrow({
+    where: { id: organizationId },
+    select: { plan: true, _count: { select: { sites: true } } },
+  });
+  const max = planFor(org.plan).maxSites;
+  if (max !== null && org._count.sites >= max) {
+    throw new AppError('PLAN_SITE_LIMIT', `Plan ${org.plan} allows ${max} site(s)`, {
+      httpStatus: 402,
+    });
+  }
 }
 
 export async function updateSite(
@@ -74,6 +111,20 @@ export async function updateSite(
     // Credenciales nuevas: el estado de Yoast ya no es fiable.
   }
   if (input.settings) {
+    // Funciones de pago: activarlas exige un plan que las incluya (desactivarlas siempre se puede).
+    const org = await deps.prisma.organization.findUniqueOrThrow({
+      where: { id: organizationId },
+      select: { plan: true },
+    });
+    const plan = planFor(org.plan);
+    if (
+      (input.settings.requireApproval && !plan.approvals) ||
+      (input.settings.autoRefresh && !plan.contentRefresh)
+    ) {
+      throw new AppError('PLAN_FEATURE_REQUIRED', `Plan ${plan.id} does not include this feature`, {
+        httpStatus: 402,
+      });
+    }
     const merged = { ...parseSettings(site.settings), ...input.settings };
     if (data['credentials']) merged.yoastMetaExposed = null;
     data['settings'] = merged;
@@ -105,14 +156,18 @@ export async function testSiteConnection(
     fetchFn: deps.fetchFn,
   });
   const result = await adapter.testConnection();
-  const exposed = result.details?.yoastMetaExposed;
-  if (result.ok && exposed !== undefined && exposed !== null) {
+  const d = result.details;
+  if (result.ok && d) {
     const settings = parseSettings(site.settings);
-    if (settings.yoastMetaExposed !== exposed) {
-      await deps.prisma.site.update({
-        where: { id: site.id },
-        data: { settings: { ...settings, yoastMetaExposed: exposed } },
-      });
+    const next = {
+      ...settings,
+      ...(d.yoastMetaExposed !== null ? { yoastMetaExposed: d.yoastMetaExposed } : {}),
+      ...(d.seoPlugin !== null || d.yoastActive !== null ? { seoPlugin: d.seoPlugin } : {}),
+      ...(d.woocommerce !== null ? { woocommerce: d.woocommerce } : {}),
+      connectorVersion: d.connectorVersion,
+    };
+    if (JSON.stringify(next) !== JSON.stringify(settings)) {
+      await deps.prisma.site.update({ where: { id: site.id }, data: { settings: next } });
     }
   }
   return {
@@ -141,8 +196,12 @@ export async function discoverKeywords(
   siteId: string,
 ): Promise<EnqueuedDto> {
   const site = await requireSite(deps.prisma, organizationId, siteId);
-  if (parseSettings(site.settings).seeds.length === 0) {
-    throw new AppError('NO_SEEDS', 'Configure at least one seed keyword first', {
+  // Sin seeds, discover las deduce del contenido de la tienda: para eso necesita leerla.
+  if (
+    parseSettings(site.settings).seeds.length === 0 &&
+    !readCredentials(site.credentials, deps.encryptionKey)
+  ) {
+    throw new AppError('NO_CREDENTIALS', 'Site has no credentials to read its content', {
       httpStatus: 400,
     });
   }
@@ -155,4 +214,18 @@ export function decryptSiteCredentials(
   site: Site,
 ): SiteCredentials {
   return decryptJson<SiteCredentials>(deps.encryptionKey, site.credentials);
+}
+
+/** Usuarios de WordPress que pueden firmar los artículos (ajuste "Autor"). */
+export async function listSiteAuthors(
+  deps: CoreDeps,
+  organizationId: string,
+  siteId: string,
+): Promise<{ id: number; name: string }[]> {
+  const site = await requireSite(deps.prisma, organizationId, siteId);
+  return createAdapter(site, {
+    encryptionKey: deps.encryptionKey,
+    allowPrivateHosts: deps.config.allowPrivateHosts,
+    fetchFn: deps.fetchFn,
+  }).listAuthors();
 }

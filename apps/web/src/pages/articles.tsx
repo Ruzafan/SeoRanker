@@ -1,8 +1,9 @@
 import { FileText } from 'lucide-react';
 import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { ARTICLE_STATUSES, type ArticleStatus } from '@seo/shared';
 import {
+  Badge,
   Button,
   EmptyState,
   ErrorBanner,
@@ -19,7 +20,10 @@ import { articleStatusLabel } from '../lib/i18n';
 
 export function ArticlesPage() {
   const { siteId = '' } = useParams();
-  const [status, setStatus] = useState<ArticleStatus | ''>('');
+  const [params] = useSearchParams();
+  const [status, setStatus] = useState<ArticleStatus | ''>(
+    (params.get('status') as ArticleStatus | null) ?? '',
+  );
   const [page, setPage] = useState(1);
   const { data, isLoading, error } = useArticles(siteId, status || undefined, page);
 
@@ -82,7 +86,18 @@ export function ArticlesPage() {
                     {formatDate(a.updatedAt)}
                   </p>
                 </div>
-                <StatusBadge status={a.status} label={articleStatusLabel[a.status]} />
+                <div className="flex shrink-0 flex-wrap justify-end gap-1">
+                  {a.reviewStatus === 'pending' && <Badge tone="amber">Por aprobar</Badge>}
+                  {a.reviewStatus === 'changes_requested' && (
+                    <Badge tone="red">Cambios pedidos</Badge>
+                  )}
+                  {a.scheduledFor && a.status !== 'published' && (
+                    <Badge tone="blue">Programado {formatDate(a.scheduledFor)}</Badge>
+                  )}
+                  {a.decayDetectedAt && <Badge tone="red">Pierde tráfico</Badge>}
+                  {a.remoteStatus === 'draft' && <Badge>Borrador en WP</Badge>}
+                  <StatusBadge status={a.status} label={articleStatusLabel[a.status]} />
+                </div>
               </Link>
             </li>
           ))}

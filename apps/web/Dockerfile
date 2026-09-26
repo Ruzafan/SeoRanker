@@ -8,6 +8,9 @@ COPY pnpm-workspace.yaml package.json pnpm-lock.yaml tsconfig.base.json ./
 COPY packages ./packages
 COPY apps ./apps
 RUN pnpm install --frozen-lockfile --filter "@seo/web..."
+# URL pública para canonical, Open Graph y sitemap de las páginas prerenderizadas.
+ARG PUBLIC_SITE_URL=https://seoranker.tech
+ENV PUBLIC_SITE_URL=$PUBLIC_SITE_URL
 RUN pnpm --filter "@seo/web..." build
 
 FROM nginx:1.27-alpine AS runtime

@@ -32,10 +32,14 @@ describe('WordPressAdapter', () => {
     expect(r.ok).toBe(true);
     expect(r.details).toEqual({
       yoastActive: true,
+      rankMathActive: false,
+      seoPlugin: 'yoast',
       yoastMetaExposed: false,
+      connectorVersion: null,
+      woocommerce: false,
       siteName: 'Mi Tienda',
     });
-    expect(r.warnings).toEqual(['YOAST_META_NOT_EXPOSED']);
+    expect(r.warnings).toEqual(['YOAST_META_NOT_EXPOSED', 'CONNECTOR_NOT_INSTALLED']);
     const auth = (fetchFn.mock.calls[0]?.[1]?.headers as Record<string, string>)['Authorization'];
     expect(auth).toBe(`Basic ${Buffer.from('admin:abcd efgh ijkl').toString('base64')}`);
   });
@@ -66,6 +70,29 @@ describe('WordPressAdapter', () => {
     ]);
   });
 
+  it('listCategories: productos primero, sin "sin categoría" ni duplicados', async () => {
+    const { wp } = adapter((url) => {
+      if (url.includes('/product_cat?'))
+        return json([
+          { name: 'Figuras &amp; estatuas', slug: 'figuras' },
+          { name: 'Sin categoría', slug: 'sin-categoria' },
+        ]);
+      if (url.includes('/categories?'))
+        return json([
+          { name: 'Guías', slug: 'guias' },
+          { name: 'Figuras & estatuas', slug: 'figuras-2' },
+          { name: 'Uncategorized', slug: 'uncategorized' },
+        ]);
+      return json({}, 404);
+    });
+    expect(await wp.listCategories(10)).toEqual(['Figuras & estatuas', 'Guías']);
+
+    const noWoo = adapter((url) =>
+      url.includes('/categories?') ? json([{ name: 'Blog', slug: 'blog' }]) : json({}, 404),
+    );
+    expect(await noWoo.wp.listCategories(10)).toEqual(['Blog']);
+  });
+
   it('createPost: crea sin meta, aplica Yoast aparte y verifica leyendo de vuelta', async () => {
     const calls: { url: string; body: unknown }[] = [];
     const { wp } = adapter((url, init) => {
@@ -94,9 +121,67 @@ describe('WordPressAdapter', () => {
       status: 'draft',
       categories: [5],
     });
-    expect(calls[1]?.body).toEqual({
-      meta: { _yoast_wpseo_focuskw: 'kw', _yoast_wpseo_metadesc: 'desc', _yoast_wpseo_title: 'T' },
+    // Sin poder detectar el plugin SEO se escriben los campos de Yoast y de Rank Math.
+    expect(calls.find((c) => c.body && 'meta' in (c.body as object))?.body).toEqual({
+      meta: {
+        _yoast_wpseo_focuskw: 'kw',
+        _yoast_wpseo_metadesc: 'desc',
+        _yoast_wpseo_title: 'T',
+        rank_math_focus_keyword: 'kw',
+        rank_math_description: 'desc',
+        rank_math_title: 'T',
+        _seo_autopilot_managed: '1',
+      },
     });
+  });
+
+  it('con Rank Math y el conector: detecta la versión y escribe solo los campos de Rank Math y el JSON-LD', async () => {
+    const calls: { url: string; body: unknown }[] = [];
+    const { wp } = adapter((url, init) => {
+      const body = init.body ? JSON.parse(String(init.body)) : undefined;
+      calls.push({ url, body });
+      // Rank Math sin configurar no publica namespace: lo dice el conector.
+      if (url.endsWith('/wp-json/')) return json({ namespaces: ['wp/v2', 'seo-autopilot/v1'] });
+      if (url.endsWith('/seo-autopilot/v1/status'))
+        return json({ version: '0.9.0', seoPlugin: 'rankmath', woocommerce: true });
+      if (url.includes('/users/me')) return json({ name: 'Tienda' });
+      if (url.includes('/posts?per_page=1'))
+        return json([{ id: 1, meta: { rank_math_description: '' } }]);
+      if (url.endsWith('/posts') && init.method === 'POST')
+        return json({ id: 5, link: 'https://tienda.es/z' });
+      if (url.endsWith('/posts/5') && init.method === 'POST') return json({ id: 5 });
+      if (url.includes('/posts/5?context=edit'))
+        return json({ id: 5, meta: { rank_math_description: 'desc' } });
+      return json({}, 404);
+    });
+    const conn = await wp.testConnection();
+    expect(conn.details).toMatchObject({
+      seoPlugin: 'rankmath',
+      rankMathActive: true,
+      yoastActive: false,
+      yoastMetaExposed: true,
+      connectorVersion: '0.9.0',
+      woocommerce: true,
+    });
+    expect(conn.warnings).toEqual(['CONNECTOR_OUTDATED']);
+
+    const res = await wp.createPost({
+      title: 'T',
+      content: 'c',
+      status: 'draft',
+      seo: { focusKeyword: 'kw', metaDescription: 'desc', schemaJson: '{"@type":"FAQPage"}' },
+    });
+    expect(res.warnings).toEqual([]);
+    expect(calls.find((c) => c.body && 'meta' in (c.body as object))?.body).toEqual({
+      meta: {
+        rank_math_focus_keyword: 'kw',
+        rank_math_description: 'desc',
+        _seo_autopilot_schema: '{"@type":"FAQPage"}',
+        _seo_autopilot_managed: '1',
+      },
+    });
+    // La detección se hace una vez por adapter.
+    expect(calls.filter((c) => c.url.endsWith('/wp-json/'))).toHaveLength(1);
   });
 
   it('avisa (sin fallar) cuando Yoast no expone el meta por REST', async () => {

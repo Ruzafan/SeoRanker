@@ -8,10 +8,16 @@ export const QUEUE_NAMES = {
   outline: 'outline',
   write: 'write',
   publish: 'publish',
+  sync: 'sync',
+  cluster: 'cluster',
+  backlink: 'backlink',
+  refresh: 'refresh',
+  'ai-visibility': 'ai-visibility',
   maintenance: 'maintenance',
 } as const;
 
-export type PipelineJobType = 'brand-voice' | 'discover' | 'outline' | 'write' | 'publish';
+/** Una cola por tipo de trabajo del pipeline (todas salvo la de mantenimiento). */
+export type PipelineJobType = Exclude<keyof typeof QUEUE_NAMES, 'maintenance'>;
 
 export interface JobPayload {
   jobRunId: string;
@@ -19,12 +25,16 @@ export interface JobPayload {
   refId?: string | undefined;
   /** 'ready': parar al terminar el artículo. 'publish': seguir hasta WordPress (automatización). */
   chain?: 'ready' | 'publish' | undefined;
+  /** Estado en WordPress elegido al enviar a mano; sin él, lo deciden los ajustes del sitio. */
+  wpStatus?: 'publish' | 'draft' | undefined;
 }
 
 export interface EnqueueInput {
   siteId: string;
   refId?: string | undefined;
   chain?: 'ready' | 'publish' | undefined;
+  /** Estado en WordPress elegido al enviar a mano; sin él, lo deciden los ajustes del sitio. */
+  wpStatus?: 'publish' | 'draft' | undefined;
 }
 
 export interface JobDispatcher {
@@ -64,6 +74,11 @@ export function createQueues(
     outline: make(QUEUE_NAMES.outline),
     write: make(QUEUE_NAMES.write),
     publish: make(QUEUE_NAMES.publish),
+    sync: make(QUEUE_NAMES.sync),
+    cluster: make(QUEUE_NAMES.cluster),
+    backlink: make(QUEUE_NAMES.backlink),
+    refresh: make(QUEUE_NAMES.refresh),
+    'ai-visibility': make(QUEUE_NAMES['ai-visibility']),
     maintenance: make(QUEUE_NAMES.maintenance),
   };
 }
@@ -84,6 +99,7 @@ export class BullDispatcher implements JobDispatcher {
       siteId: input.siteId,
       refId: input.refId,
       chain: input.chain,
+      wpStatus: input.wpStatus,
     };
     try {
       await this.queues[type].add(type, payload);

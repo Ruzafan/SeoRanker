@@ -3,31 +3,31 @@ import { useEffect, useState } from 'react';
 
 type Theme = 'light' | 'dark';
 
-function readTheme(): Theme {
-  try {
-    const saved = localStorage.getItem('theme');
-    if (saved === 'light' || saved === 'dark') return saved;
-  } catch {
-    /* almacenamiento no disponible */
-  }
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+/** El script del <head> ya aplicó la clase `dark` antes de pintar: es la fuente de verdad. */
+function currentTheme(): Theme {
+  return document.documentElement.classList.contains('dark') ? 'dark' : 'light';
 }
 
 export function ThemeToggle() {
-  const [theme, setTheme] = useState<Theme>(readTheme);
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', theme === 'dark');
+  // null hasta montar: servidor (prerender) y primer render del cliente coinciden.
+  const [theme, setTheme] = useState<Theme | null>(null);
+  useEffect(() => setTheme(currentTheme()), []);
+
+  const toggle = () => {
+    const next: Theme = (theme ?? currentTheme()) === 'dark' ? 'light' : 'dark';
+    document.documentElement.classList.toggle('dark', next === 'dark');
     try {
-      localStorage.setItem('theme', theme);
+      localStorage.setItem('theme', next);
     } catch {
-      /* ignorar */
+      /* almacenamiento no disponible */
     }
-  }, [theme]);
+    setTheme(next);
+  };
   const Icon = theme === 'dark' ? Sun : Moon;
   return (
     <button
       type="button"
-      onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+      onClick={toggle}
       aria-label={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
       className="rounded-lg p-2 text-stone-600 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800"
     >

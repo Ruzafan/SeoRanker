@@ -25,7 +25,13 @@ const envSchema = z
       }
     }),
     SERPAPI_KEY: z.preprocess(emptyToUndefined, z.string().optional()),
-    FREE_PLAN_MAX_ARTICLES: z.coerce.number().int().min(0).default(10),
+    // Search Console (opcional): el mismo cliente OAuth que la api, para refrescar tokens.
+    GOOGLE_CLIENT_ID: z.preprocess(emptyToUndefined, z.string().optional()),
+    GOOGLE_CLIENT_SECRET: z.preprocess(emptyToUndefined, z.string().optional()),
+    // Volumen y dificultad de keywords (opcional): cuenta de DataForSEO.
+    DATAFORSEO_LOGIN: z.preprocess(emptyToUndefined, z.string().optional()),
+    DATAFORSEO_PASSWORD: z.preprocess(emptyToUndefined, z.string().optional()),
+    FREE_PLAN_MAX_ARTICLES: z.coerce.number().int().min(0).default(3),
     ALLOW_PRIVATE_HOSTS: z.preprocess(emptyToUndefined, bool.optional()),
     WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(20).default(2),
   })

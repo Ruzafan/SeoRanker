@@ -1,6 +1,6 @@
 import { parseSettings } from '@seo/shared';
 import { AppError, errorCode, notFound } from '../errors.js';
-import { countWords, sanitizeArticleHtml } from '../html.js';
+import { applyProductCards, countWords, sanitizeArticleHtml } from '../html.js';
 import type { OutlineResult } from '../ai/prompts/outline.js';
 import {
   writeSchema,
@@ -9,7 +9,9 @@ import {
   writeUser,
   WRITE_PROMPT_VERSION,
   type InternalLink,
+  type ProductOption,
 } from '../ai/prompts/write.js';
+import type { StoreProduct } from '../adapters/index.js';
 import { siteScope } from '../tenant.js';
 import { adapterFor, loadSite, modelFor, siteContext } from './common.js';
 import type { PipelineContext, RunInfo } from './context.js';
@@ -18,9 +20,13 @@ import { recordUsage } from './usage.js';
 
 const MAX_LINKS = 25;
 
-/** max_tokens = palabras * 2.5 + 800, con techo de 8192. */
+/**
+ * max_tokens = palabras * 4 + 1500, con techo de 16000. Medido con la API real: 2,5 tokens por
+ * palabra se quedaba corto (un artículo de 1200 palabras se truncó a 3800 tokens) porque el HTML va
+ * escapado dentro del JSON del tool y el español tokeniza peor que el inglés.
+ */
 export function maxTokensFor(wordCount: number): number {
-  return Math.min(8192, Math.round(wordCount * 2.5 + 800));
+  return Math.min(16_000, Math.round(wordCount * 4 + 1500));
 }
 
 export function runWrite(ctx: PipelineContext, info: RunInfo): Promise<void> {
@@ -54,14 +60,50 @@ export function runWrite(ctx: PipelineContext, info: RunInfo): Promise<void> {
       const settings = parseSettings(site.settings);
 
       // Enlazado interno: solo URLs reales del sitio. Si el sitio no responde seguimos sin enlaces y lo anotamos.
-      let links: InternalLink[] = [];
+      const links: InternalLink[] = [];
       let linksWarning: string | undefined;
+      // Artículos publicados del mismo cluster (la pilar primero): el enlazado temático refuerza el tema.
+      let pillar: InternalLink | null = null;
+      if (keyword?.clusterId) {
+        const cluster = await ctx.prisma.keywordCluster.findFirst({
+          where: { id: keyword.clusterId, siteId: site.id },
+        });
+        const siblings = await scope.articles.findMany({
+          where: {
+            id: { not: article.id },
+            remoteStatus: 'publish',
+            keyword: { clusterId: keyword.clusterId },
+          },
+          select: { title: true, remoteUrl: true, keywordId: true },
+          take: 10,
+        });
+        for (const s of siblings) {
+          if (!s.remoteUrl) continue;
+          const link = { title: s.title, url: s.remoteUrl };
+          if (s.keywordId && s.keywordId === cluster?.pillarKeywordId) pillar = link;
+          else links.push(link);
+        }
+        if (pillar) links.unshift(pillar);
+      }
       try {
         const content = await adapterFor(ctx, site).listContent(MAX_LINKS);
-        links = content.map((c) => ({ title: c.title, url: c.url }));
+        const seen = new Set(links.map((l) => l.url));
+        links.push(
+          ...content.filter((c) => !seen.has(c.url)).map((c) => ({ title: c.title, url: c.url })),
+        );
       } catch (err) {
         linksWarning = errorCode(err);
         ctx.log.warn({ siteId: site.id, code: linksWarning }, 'internal links unavailable');
+      }
+
+      // Productos de la tienda que el artículo puede recomendar (tarjeta con precio y compra).
+      let products: StoreProduct[] = [];
+      if (settings.productCards && settings.woocommerce !== false) {
+        try {
+          products = await adapterFor(ctx, site).searchProducts(keyword?.term ?? article.title, 8);
+        } catch (err) {
+          ctx.log.warn({ siteId: site.id, code: errorCode(err) }, 'store products unavailable');
+        }
       }
 
       const outline = article.outline as unknown as OutlineResult;
@@ -73,6 +115,13 @@ export function runWrite(ctx: PipelineContext, info: RunInfo): Promise<void> {
           outline,
           wordCount: settings.wordCount,
           links,
+          pillar,
+          products: products.map((p): ProductOption => ({
+            id: p.id,
+            name: p.name,
+            url: p.url,
+            price: p.price,
+          })),
         }),
         maxTokens: maxTokensFor(settings.wordCount),
         toolDescription: writeToolDescription,
@@ -81,18 +130,28 @@ export function runWrite(ctx: PipelineContext, info: RunInfo): Promise<void> {
       await tracker.add(result.model, result.usage);
 
       const allowed = new Set(links.map((l) => l.url));
-      const html = sanitizeArticleHtml(result.data.contentHtml, allowed);
+      const cards = applyProductCards(
+        sanitizeArticleHtml(result.data.contentHtml, allowed),
+        new Set(products.map((p) => p.id)),
+      );
+      const html = cards.html;
       const wordCount = countWords(html);
+      const featured = cards.productIds
+        .map((id) => products.find((p) => p.id === id)?.imageId)
+        .find((id): id is number => typeof id === 'number');
 
       await scope.articles.updateById(article.id, {
         contentHtml: html,
         wordCount,
         status: 'ready',
+        ...(featured ? { featuredMediaId: featured } : {}),
+        // Con aprobación obligatoria, el cliente tiene que darle el visto bueno antes de publicar.
+        ...(settings.requireApproval ? { reviewStatus: 'pending' } : {}),
       });
       if (article.keywordId) await scope.keywords.updateById(article.keywordId, { status: 'done' });
       await recordUsage(ctx.prisma, site.id, { articles: 1 });
 
-      if (info.chain === 'publish') {
+      if (info.chain === 'publish' && !settings.requireApproval) {
         await ctx.dispatcher.enqueue('publish', { siteId: site.id, refId: article.id });
       }
       return {
@@ -101,6 +160,7 @@ export function runWrite(ctx: PipelineContext, info: RunInfo): Promise<void> {
           wordCount,
           links: links.length,
           linksWarning,
+          products: cards.productIds,
           prompt: WRITE_PROMPT_VERSION,
         },
       };

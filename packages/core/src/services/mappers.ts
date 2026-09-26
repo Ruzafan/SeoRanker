@@ -38,6 +38,15 @@ export function toKeywordDto(k: Keyword): KeywordDto {
     score: k.score,
     status: k.status as KeywordStatus,
     seedTerm: k.seedTerm,
+    volume: k.volume,
+    difficulty: k.difficulty,
+    cpc: k.cpc,
+    gscImpressions: k.gscImpressions,
+    gscClicks: k.gscClicks,
+    gscPosition: k.gscPosition,
+    clusterId: k.clusterId,
+    discardReason: k.discardReason,
+    similarToArticleId: k.similarToArticleId,
     createdAt: k.createdAt.toISOString(),
   };
 }
@@ -52,19 +61,44 @@ export function toArticleSummary(a: Article): ArticleSummaryDto {
     status: a.status as ArticleStatus,
     wordCount: a.wordCount,
     remoteUrl: a.remoteUrl,
+    remoteStatus: a.remoteStatus,
+    decayDetectedAt: a.decayDetectedAt?.toISOString() ?? null,
+    scheduledFor: a.scheduledFor?.toISOString() ?? null,
+    reviewStatus: a.reviewStatus as ArticleSummaryDto['reviewStatus'],
+    refreshedAt: a.refreshedAt?.toISOString() ?? null,
     publishedAt: a.publishedAt?.toISOString() ?? null,
     updatedAt: a.updatedAt.toISOString(),
     createdAt: a.createdAt.toISOString(),
   };
 }
 
-export function toArticleDto(a: Article): ArticleDto {
+export function toArticleDto(a: Article, keyword: string | null = null): ArticleDto {
+  const serp = a.serp as {
+    fetchedAt?: string;
+    results?: { position: number; title: string; url: string; wordCount: number | null }[];
+    relatedQuestions?: string[];
+  } | null;
   return {
     ...toArticleSummary(a),
     metaDescription: a.metaDescription,
     contentHtml: a.contentHtml,
     outline: (a.outline as ArticleDto['outline']) ?? null,
     remotePostId: a.remotePostId,
+    keyword,
+    featuredMediaId: a.featuredMediaId,
+    hasPreviousVersion: !!a.previousContentHtml,
+    serp: serp?.results
+      ? {
+          fetchedAt: serp.fetchedAt ?? '',
+          results: serp.results.map((r) => ({
+            position: r.position,
+            title: r.title,
+            url: r.url,
+            wordCount: r.wordCount,
+          })),
+          relatedQuestions: serp.relatedQuestions ?? [],
+        }
+      : null,
   };
 }
 

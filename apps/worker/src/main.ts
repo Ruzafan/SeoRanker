@@ -11,6 +11,7 @@ import {
   redisConnectionFromUrl,
   runPipelineJob,
   runScheduler,
+  runSyncScheduler,
   runWatchdog,
   type JobPayload,
   type PipelineContext,
@@ -26,9 +27,15 @@ const PIPELINE_TYPES: PipelineJobType[] = [
   'outline',
   'write',
   'publish',
+  'sync',
+  'cluster',
+  'backlink',
+  'refresh',
+  'ai-visibility',
 ];
 const WATCHDOG_EVERY_MS = 10 * 60_000;
 const SCHEDULER_EVERY_MS = 15 * 60_000;
+const SYNC_SCHEDULER_EVERY_MS = 60 * 60_000;
 
 async function main(): Promise<void> {
   const env = loadEnv();
@@ -52,6 +59,18 @@ async function main(): Promise<void> {
       serpApiKey: env.SERPAPI_KEY,
       freePlanMaxArticles: env.FREE_PLAN_MAX_ARTICLES,
       allowPrivateHosts: env.ALLOW_PRIVATE_HOSTS,
+      google:
+        env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
+          ? {
+              clientId: env.GOOGLE_CLIENT_ID,
+              clientSecret: env.GOOGLE_CLIENT_SECRET,
+              redirectUri: '', // el worker solo refresca tokens
+            }
+          : undefined,
+      dataForSeo:
+        env.DATAFORSEO_LOGIN && env.DATAFORSEO_PASSWORD
+          ? { login: env.DATAFORSEO_LOGIN, password: env.DATAFORSEO_PASSWORD }
+          : undefined,
     },
     log: {
       info: (o, m) => log.info(o, m),
@@ -61,7 +80,7 @@ async function main(): Promise<void> {
   };
 
   const processor = (type: PipelineJobType) => async (job: Job<JobPayload>) => {
-    const { jobRunId, siteId, refId, chain } = job.data;
+    const { jobRunId, siteId, refId, chain, wpStatus } = job.data;
     // El sitio (y con él sus JobRun) pudo borrarse mientras el trabajo esperaba en cola.
     if (!(await prisma.jobRun.findUnique({ where: { id: jobRunId }, select: { id: true } }))) {
       log.warn({ jobRunId, type }, 'job run no longer exists, dropping job');
@@ -73,6 +92,7 @@ async function main(): Promise<void> {
         siteId,
         refId,
         chain,
+        wpStatus,
         attempt: job.attemptsMade + 1,
         maxAttempts: job.opts.attempts ?? 3,
       });
@@ -104,6 +124,7 @@ async function main(): Promise<void> {
     async (job) => {
       if (job.name === 'watchdog') return runWatchdog(prisma, ctx.log);
       if (job.name === 'scheduler') return runScheduler(ctx);
+      if (job.name === 'sync-scheduler') return runSyncScheduler(ctx);
       return undefined;
     },
     { connection, concurrency: 1 },
@@ -123,6 +144,12 @@ async function main(): Promise<void> {
     'scheduler',
     { every: SCHEDULER_EVERY_MS },
     { name: 'scheduler', opts: jobOpts },
+  );
+
+  await queues.maintenance.upsertJobScheduler(
+    'sync-scheduler',
+    { every: SYNC_SCHEDULER_EVERY_MS },
+    { name: 'sync-scheduler', opts: jobOpts },
   );
 
   log.info(

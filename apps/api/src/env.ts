@@ -33,8 +33,48 @@ const envSchema = z
     COOKIE_SECURE: z.preprocess(emptyToUndefined, bool.optional()),
     /** Permite sitios en localhost/IP privada. Por defecto solo fuera de producción. */
     ALLOW_PRIVATE_HOSTS: z.preprocess(emptyToUndefined, bool.optional()),
-    FREE_PLAN_MAX_ARTICLES: z.coerce.number().int().min(0).default(10),
+    FREE_PLAN_MAX_ARTICLES: z.coerce.number().int().min(0).default(3),
     LOGIN_RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(10),
+    // Stripe (opcional): sin STRIPE_SECRET_KEY el panel funciona sin pagos. Si se define, van todas.
+    STRIPE_SECRET_KEY: z.preprocess(emptyToUndefined, z.string().startsWith('sk_').optional()),
+    STRIPE_WEBHOOK_SECRET: z.preprocess(
+      emptyToUndefined,
+      z.string().startsWith('whsec_').optional(),
+    ),
+    STRIPE_PRICE_STARTER: z.preprocess(
+      emptyToUndefined,
+      z.string().startsWith('price_').optional(),
+    ),
+    STRIPE_PRICE_PRO: z.preprocess(emptyToUndefined, z.string().startsWith('price_').optional()),
+    STRIPE_PRICE_AGENCY: z.preprocess(emptyToUndefined, z.string().startsWith('price_').optional()),
+    STRIPE_AUTOMATIC_TAX: z.preprocess(emptyToUndefined, bool.default(false)),
+    // Search Console (opcional): cliente OAuth "Aplicación web" de Google Cloud.
+    GOOGLE_CLIENT_ID: z.preprocess(emptyToUndefined, z.string().optional()),
+    GOOGLE_CLIENT_SECRET: z.preprocess(emptyToUndefined, z.string().optional()),
+  })
+  .superRefine((e, ctx) => {
+    if (!!e.GOOGLE_CLIENT_ID !== !!e.GOOGLE_CLIENT_SECRET) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['GOOGLE_CLIENT_SECRET'],
+        message: 'GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET van juntas',
+      });
+    }
+    if (!e.STRIPE_SECRET_KEY) return;
+    for (const key of [
+      'STRIPE_WEBHOOK_SECRET',
+      'STRIPE_PRICE_STARTER',
+      'STRIPE_PRICE_PRO',
+      'STRIPE_PRICE_AGENCY',
+    ] as const) {
+      if (!e[key]) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [key],
+          message: 'obligatoria cuando STRIPE_SECRET_KEY está definida',
+        });
+      }
+    }
   })
   .transform((e) => ({
     ...e,
