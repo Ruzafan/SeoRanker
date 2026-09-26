@@ -45,9 +45,10 @@ export function runPublish(ctx: PipelineContext, info: RunInfo): Promise<void> {
       // Lo que ya está publicado en WordPress sigue publicado al actualizarlo; lo programado sale
       // publicado al llegar su fecha; el resto, según la publicación automática.
       const status =
-        settings.autoPublish || article.remoteStatus === 'publish' || article.scheduledFor
+        info.wpStatus ??
+        (settings.autoPublish || article.remoteStatus === 'publish' || article.scheduledFor
           ? 'publish'
-          : 'draft';
+          : 'draft');
       const schemaJson = buildArticleSchema({
         title: article.title,
         description: article.metaDescription,

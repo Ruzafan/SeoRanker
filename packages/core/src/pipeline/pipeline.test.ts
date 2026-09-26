@@ -261,6 +261,29 @@ describe.skipIf(!db)('pipeline (integración con Postgres)', () => {
     expect(schema['@graph'][0].mainEntity[0].name).toBe('¿Cuánto polvo?');
   });
 
+  it('el estado elegido al enviar manda sobre los ajustes (publicar ya o borrador)', async () => {
+    const kw = await newKeyword();
+    const ctx = ctxWith();
+    await dispatcher.enqueue('outline', { siteId, refId: kw.id, chain: 'ready' });
+    await drain(ctx);
+    const article = await prisma.article.findFirstOrThrow({ where: { siteId } });
+    // autoPublish=false en el sitio, pero el usuario pide publicar.
+    await dispatcher.enqueue('publish', { siteId, refId: article.id, wpStatus: 'publish' });
+    const job = dispatcher.queue.shift()!;
+    await runPipelineJob(ctx, 'publish', {
+      jobRunId: job.jobRunId,
+      siteId,
+      refId: article.id,
+      wpStatus: job.input.wpStatus,
+      attempt: 1,
+      maxAttempts: 3,
+    });
+    expect(adapter.created[0]).toMatchObject({ status: 'publish' });
+    expect(
+      (await prisma.article.findUniqueOrThrow({ where: { id: article.id } })).remoteStatus,
+    ).toBe('publish');
+  });
+
   it('con chain=ready se detiene en ready (no publica)', async () => {
     const kw = await newKeyword();
     await dispatcher.enqueue('outline', { siteId, refId: kw.id, chain: 'ready' });

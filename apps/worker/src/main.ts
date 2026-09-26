@@ -80,7 +80,7 @@ async function main(): Promise<void> {
   };
 
   const processor = (type: PipelineJobType) => async (job: Job<JobPayload>) => {
-    const { jobRunId, siteId, refId, chain } = job.data;
+    const { jobRunId, siteId, refId, chain, wpStatus } = job.data;
     // El sitio (y con él sus JobRun) pudo borrarse mientras el trabajo esperaba en cola.
     if (!(await prisma.jobRun.findUnique({ where: { id: jobRunId }, select: { id: true } }))) {
       log.warn({ jobRunId, type }, 'job run no longer exists, dropping job');
@@ -92,6 +92,7 @@ async function main(): Promise<void> {
         siteId,
         refId,
         chain,
+        wpStatus,
         attempt: job.attemptsMade + 1,
         maxAttempts: job.opts.attempts ?? 3,
       });

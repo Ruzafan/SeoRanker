@@ -9,6 +9,7 @@ import {
   type EnqueuedDto,
   type Paginated,
   type PatchArticleInput,
+  type PublishArticleInput,
   type ReviewInput,
 } from '@seo/shared';
 import { AppError } from '../errors.js';
@@ -96,6 +97,7 @@ export async function publishArticle(
   deps: CoreDeps,
   organizationId: string,
   id: string,
+  input: PublishArticleInput = {},
 ): Promise<EnqueuedDto> {
   const article = await requireArticle(deps.prisma, organizationId, id);
   if (!article.contentHtml) {
@@ -104,11 +106,16 @@ export async function publishArticle(
   if (article.status === 'writing' || article.status === 'publishing') {
     throw new AppError('INVALID_STATE', `Article is ${article.status}`, { httpStatus: 409 });
   }
-  await assertApproved(deps, article);
+  // Un borrador no sale al público: no necesita la aprobación del cliente.
+  if (input.status !== 'draft') await assertApproved(deps, article);
   const scope = siteScope(deps.prisma, article.siteId);
   await scope.articles.updateById(article.id, { status: 'publishing' });
   try {
-    return await deps.dispatcher.enqueue('publish', { siteId: article.siteId, refId: article.id });
+    return await deps.dispatcher.enqueue('publish', {
+      siteId: article.siteId,
+      refId: article.id,
+      wpStatus: input.status,
+    });
   } catch (err) {
     await scope.articles.updateById(article.id, { status: article.status });
     throw err;

@@ -292,7 +292,9 @@ export const usePatchArticle = (siteId: string, id: string) =>
     api.patch<ArticleDto>(`/articles/${id}`, patch),
   );
 export const usePublishArticle = (siteId: string, id: string) =>
-  useArticleMutation(siteId, id, () => api.post<EnqueuedDto>(`/articles/${id}/publish`));
+  useArticleMutation(siteId, id, (status?: 'publish' | 'draft') =>
+    api.post<EnqueuedDto>(`/articles/${id}/publish`, status ? { status } : {}),
+  );
 export const useRegenerateArticle = (siteId: string, id: string) =>
   useArticleMutation(siteId, id, () => api.post<EnqueuedDto>(`/articles/${id}/regenerate`));
 export const useDeleteArticle = (siteId: string, id: string) =>

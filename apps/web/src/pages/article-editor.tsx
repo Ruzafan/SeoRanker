@@ -112,10 +112,14 @@ export function ArticleEditorPage() {
     return !!res;
   };
 
-  const onPublish = async () => {
+  const onPublish = async (status: 'publish' | 'draft') => {
     if (dirty && !(await save())) return;
-    await withToast(publish.mutateAsync(), 'Enviando a WordPress…');
+    await withToast(
+      publish.mutateAsync(status),
+      status === 'publish' ? 'Publicando en WordPress…' : 'Guardando como borrador en WordPress…',
+    );
   };
+  const live = article.remoteStatus === 'publish';
 
   const set =
     <T,>(setter: (v: T) => void) =>
@@ -269,11 +273,21 @@ export function ArticleEditorPage() {
         <Button
           icon={Send}
           disabled={busy || !html}
-          loading={publish.isPending}
-          onClick={() => void onPublish()}
+          loading={publish.isPending && publish.variables === 'publish'}
+          onClick={() => void onPublish('publish')}
         >
-          {article.remotePostId ? 'Actualizar en WordPress' : 'Enviar a WordPress'}
+          {live ? 'Actualizar publicado' : 'Publicar ahora'}
         </Button>
+        {!live && (
+          <Button
+            variant="secondary"
+            disabled={busy || !html}
+            loading={publish.isPending && publish.variables === 'draft'}
+            onClick={() => void onPublish('draft')}
+          >
+            {article.remotePostId ? 'Actualizar borrador' : 'Guardar como borrador'}
+          </Button>
+        )}
         <Button
           icon={RefreshCw}
           variant="secondary"
@@ -308,9 +322,9 @@ export function ArticleEditorPage() {
         </Button>
       </div>
       <p className="mt-3 text-xs text-stone-500">
-        {site?.settings.autoPublish
-          ? 'Publicación automática activada: se publicará directamente.'
-          : 'Se enviará a WordPress como borrador; publícalo desde allí cuando quieras.'}
+        «Publicar ahora» lo deja visible en tu web; «Guardar como borrador» lo deja en WordPress
+        para revisarlo allí. Lo que genera la automatización sale{' '}
+        {site?.settings.autoPublish ? 'publicado' : 'como borrador'} (se cambia en Ajustes).
       </p>
     </>
   );

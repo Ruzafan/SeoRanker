@@ -42,6 +42,8 @@ export interface RunInfo {
   siteId: string;
   refId?: string | undefined;
   chain?: 'ready' | 'publish' | undefined;
+  /** Estado en WordPress elegido al enviar a mano; sin él, lo deciden los ajustes del sitio. */
+  wpStatus?: 'publish' | 'draft' | undefined;
   attempt: number;
   maxAttempts: number;
 }

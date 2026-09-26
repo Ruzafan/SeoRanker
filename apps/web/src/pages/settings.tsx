@@ -428,10 +428,11 @@ export function SettingsPage() {
               {...register('autoPublish')}
             />
             <span>
-              Publicación automática
+              Publicar directamente (sin borrador)
               <span className="block text-xs text-stone-500">
-                Desactivado: los artículos se envían a WordPress como <strong>borrador</strong> para
-                que los revises.
+                Activado: lo que genera la automatización se publica en tu web en cuanto está listo.
+                Desactivado: llega a WordPress como <strong>borrador</strong> para que lo revises.
+                Al enviar a mano desde el editor eliges tú en cada artículo.
               </span>
             </span>
           </label>

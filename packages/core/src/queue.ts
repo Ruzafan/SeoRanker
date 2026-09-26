@@ -25,12 +25,16 @@ export interface JobPayload {
   refId?: string | undefined;
   /** 'ready': parar al terminar el artículo. 'publish': seguir hasta WordPress (automatización). */
   chain?: 'ready' | 'publish' | undefined;
+  /** Estado en WordPress elegido al enviar a mano; sin él, lo deciden los ajustes del sitio. */
+  wpStatus?: 'publish' | 'draft' | undefined;
 }
 
 export interface EnqueueInput {
   siteId: string;
   refId?: string | undefined;
   chain?: 'ready' | 'publish' | undefined;
+  /** Estado en WordPress elegido al enviar a mano; sin él, lo deciden los ajustes del sitio. */
+  wpStatus?: 'publish' | 'draft' | undefined;
 }
 
 export interface JobDispatcher {
@@ -95,6 +99,7 @@ export class BullDispatcher implements JobDispatcher {
       siteId: input.siteId,
       refId: input.refId,
       chain: input.chain,
+      wpStatus: input.wpStatus,
     };
     try {
       await this.queues[type].add(type, payload);

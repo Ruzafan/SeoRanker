@@ -127,6 +127,10 @@ export const articleQuerySchema = z.object({
 });
 export type ArticleQuery = z.infer<typeof articleQuerySchema>;
 
+/** Enviar a WordPress: publicar ya o dejar borrador. Sin `status`, según los ajustes del sitio. */
+export const publishArticleSchema = z.object({ status: z.enum(['publish', 'draft']).optional() });
+export type PublishArticleInput = z.infer<typeof publishArticleSchema>;
+
 // ---- Jobs ----------------------------------------------------------------
 export const JOB_TYPES = [
   'discover',

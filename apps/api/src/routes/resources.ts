@@ -64,6 +64,7 @@ import {
   pageQuerySchema,
   patchArticleSchema,
   patchKeywordSchema,
+  publishArticleSchema,
   selectPropertySchema,
   updateSiteSchema,
 } from '@seo/shared';
@@ -204,7 +205,8 @@ export function resourceRoutes(deps: CoreDeps, auth: AuthHelpers) {
 
     app.post('/articles/:id/publish', async (req, reply) => {
       const { id } = idParam.parse(req.params);
-      return reply.status(202).send(await publishArticle(deps, org(req), id));
+      const body = publishArticleSchema.parse(req.body ?? {});
+      return reply.status(202).send(await publishArticle(deps, org(req), id, body));
     });
 
     app.post('/articles/:id/regenerate', async (req, reply) => {
