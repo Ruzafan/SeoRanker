@@ -22,16 +22,43 @@ import {
   formatTokens,
   jobDurationMs,
 } from '../lib/format';
-import { useDiscover, useGenerate, useSite, useStats, withToast } from '../lib/hooks';
+import {
+  useArticles,
+  useDiscover,
+  useGenerate,
+  useMe,
+  usePerformance,
+  useSite,
+  useStats,
+  withToast,
+} from '../lib/hooks';
 import { jobStatusLabel, jobTypeLabel } from '../lib/i18n';
 
-function Stat({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
-  return (
-    <Card>
+function Stat({
+  label,
+  value,
+  sub,
+  to,
+}: {
+  label: string;
+  value: string | number;
+  sub?: string;
+  /** Si se indica, la tarjeta lleva a la sección con el detalle. */
+  to?: string;
+}) {
+  const body = (
+    <Card className={cx('h-full', to && 'transition hover:border-teal-600')}>
       <p className="text-xs font-medium uppercase tracking-wide text-stone-500">{label}</p>
       <p className="mt-1 text-2xl font-semibold tabular-nums">{value}</p>
       {sub && <p className="mt-0.5 text-xs text-stone-500">{sub}</p>}
     </Card>
+  );
+  return to ? (
+    <Link to={to} className="block">
+      {body}
+    </Link>
+  ) : (
+    body
   );
 }
 
@@ -39,6 +66,9 @@ export function DashboardPage() {
   const { siteId = '' } = useParams();
   const { data: site } = useSite(siteId);
   const { data: stats, isLoading, error } = useStats(siteId);
+  const { data: me } = useMe();
+  const { data: perf } = usePerformance(siteId);
+  const { data: toReview } = useArticles(siteId, 'ready', 1);
   const generate = useGenerate(siteId);
   const discover = useDiscover(siteId);
 
@@ -169,18 +199,31 @@ export function DashboardPage() {
           value={stats.publishedThisMonth}
           sub="Enviados a WordPress"
         />
-        <Stat label="Keywords pendientes" value={stats.pendingKeywords} />
         <Stat
-          label="Tokens del mes"
-          value={formatTokens(usage.inputTokens + usage.outputTokens)}
-          sub={`${formatTokens(usage.inputTokens)} entrada · ${formatTokens(usage.outputTokens)} salida`}
+          label="Por revisar"
+          value={toReview?.total ?? '—'}
+          sub="Artículos listos para enviar"
+          to="articles?status=ready"
         />
         <Stat
-          label="Coste estimado"
-          value={formatCents(usage.costCents)}
-          sub="Según tarifas públicas"
+          label="Clics desde Google"
+          value={perf?.period ? perf.totals.clicks.toLocaleString('es-ES') : '—'}
+          sub={perf?.period ? 'Últimos 28 días' : 'Conecta Search Console'}
+          to="performance"
+        />
+        <Stat
+          label="Oportunidades"
+          value={perf?.searchConsole.connected ? perf.opportunities.length : stats.pendingKeywords}
+          sub={perf?.searchConsole.connected ? 'Búsquedas donde ya asomas' : 'Keywords pendientes'}
+          to="keywords"
         />
       </div>
+      {me?.isAdmin && (
+        <p className="mt-2 text-right text-xs text-stone-500">
+          Consumo de IA este mes: {formatTokens(usage.inputTokens + usage.outputTokens)} tokens ·{' '}
+          {formatCents(usage.costCents)}
+        </p>
+      )}
 
       <Card className="mt-3">
         <div className="flex flex-wrap items-center justify-between gap-2 text-sm">

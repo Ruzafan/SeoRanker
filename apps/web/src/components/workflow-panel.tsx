@@ -54,7 +54,7 @@ export function WorkflowPanel({ siteId, article }: { siteId: string; article: Ar
   const r = REVIEW[article.reviewStatus];
 
   return (
-    <Card className="mt-4 space-y-5">
+    <Card className="space-y-5">
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="mr-auto font-medium">Flujo editorial</h2>
         <Badge tone={r.tone}>{r.label}</Badge>

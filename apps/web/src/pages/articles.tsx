@@ -1,6 +1,6 @@
 import { FileText } from 'lucide-react';
 import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { ARTICLE_STATUSES, type ArticleStatus } from '@seo/shared';
 import {
   Badge,
@@ -20,7 +20,10 @@ import { articleStatusLabel } from '../lib/i18n';
 
 export function ArticlesPage() {
   const { siteId = '' } = useParams();
-  const [status, setStatus] = useState<ArticleStatus | ''>('');
+  const [params] = useSearchParams();
+  const [status, setStatus] = useState<ArticleStatus | ''>(
+    (params.get('status') as ArticleStatus | null) ?? '',
+  );
   const [page, setPage] = useState(1);
   const { data, isLoading, error } = useArticles(siteId, status || undefined, page);
 

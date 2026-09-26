@@ -10,12 +10,14 @@ import {
   LineChart,
   ListChecks,
   LogOut,
+  MoreHorizontal,
   Mic2,
   Settings,
   Shield,
   type LucideIcon,
 } from 'lucide-react';
-import { Link, NavLink, Outlet, useNavigate, useParams } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useLogout, useMe, useRefreshWhenIdle, useSite, useSites } from '../lib/hooks';
 import { ThemeToggle } from './theme';
 import { cx, Spinner } from './ui';
@@ -157,28 +159,70 @@ export function SiteLayout() {
         </nav>
         <main className="min-w-0 flex-1 pb-20 md:pb-0">{isLoading ? <Spinner /> : <Outlet />}</main>
       </div>
+      <MobileNav />
+    </div>
+  );
+}
+
+/** En móvil caben 4 secciones legibles; el resto va en «Más». */
+const MOBILE_PRIMARY = ['', 'performance', 'keywords', 'articles'];
+
+function MobileNav() {
+  const [open, setOpen] = useState(false);
+  const { pathname } = useLocation();
+  useEffect(() => setOpen(false), [pathname]);
+  const primary = siteNav.filter((i) => MOBILE_PRIMARY.includes(i.to));
+  const more = siteNav.filter((i) => !MOBILE_PRIMARY.includes(i.to));
+  const item = (active: boolean) =>
+    cx(
+      'flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium',
+      active ? 'text-teal-700 dark:text-teal-400' : 'text-stone-500',
+    );
+  return (
+    <div className="print:hidden md:hidden">
+      {open && (
+        <div className="fixed inset-x-0 bottom-14 z-20 border-t border-stone-200 bg-white p-2 shadow-lg dark:border-stone-800 dark:bg-stone-950">
+          <ul className="grid grid-cols-3 gap-1">
+            {more.map((i) => (
+              <li key={i.to}>
+                <NavLink
+                  to={i.to}
+                  className={({ isActive }) =>
+                    cx(
+                      'flex flex-col items-center gap-1 rounded-lg p-3 text-xs font-medium',
+                      isActive
+                        ? 'bg-stone-100 text-teal-800 dark:bg-stone-800 dark:text-teal-300'
+                        : 'text-stone-600 dark:text-stone-300',
+                    )
+                  }
+                >
+                  <i.icon className="h-5 w-5" />
+                  {i.label}
+                </NavLink>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       <nav
-        className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-9 border-t print:hidden border-stone-200 bg-white/95 backdrop-blur dark:border-stone-800 dark:bg-stone-950/95 md:hidden"
+        className="fixed inset-x-0 bottom-0 z-20 grid h-14 grid-cols-5 border-t border-stone-200 bg-white/95 backdrop-blur dark:border-stone-800 dark:bg-stone-950/95"
         aria-label="Secciones del sitio"
       >
-        {siteNav.map((i) => (
-          <NavLink
-            key={i.to}
-            to={i.to}
-            end={i.end}
-            className={({ isActive }) =>
-              cx(
-                'flex flex-col items-center gap-0.5 py-2 text-[10px] font-medium',
-                isActive ? 'text-teal-700 dark:text-teal-400' : 'text-stone-500',
-              )
-            }
-          >
+        {primary.map((i) => (
+          <NavLink key={i.to} to={i.to} end={i.end} className={({ isActive }) => item(isActive)}>
             <i.icon className="h-5 w-5" />
-            <span className="max-w-full truncate px-0.5">
-              {i.label.replace('Voz de marca', 'Voz')}
-            </span>
+            <span>{i.label}</span>
           </NavLink>
         ))}
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen((o) => !o)}
+          className={item(open || more.some((i) => pathname.endsWith(`/${i.to}`)))}
+        >
+          <MoreHorizontal className="h-5 w-5" />
+          <span>Más</span>
+        </button>
       </nav>
     </div>
   );

@@ -125,6 +125,9 @@ export function KeywordsPage() {
   };
 
   const ids = [...selected];
+  // Columnas de métricas solo si hay datos (sin DataForSEO o Search Console serían todo «—»).
+  const showVolume = items.some((k) => k.volume !== null);
+  const showGoogle = items.some((k) => k.gscImpressions !== null);
   return (
     <>
       <PageHeader
@@ -365,26 +368,30 @@ export function KeywordsPage() {
                     Score {sort === 'score' && <SortIcon className="h-3 w-3" />}
                   </button>
                 </th>
-                <th className="hidden p-3 md:table-cell">
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1 font-medium uppercase"
-                    onClick={() => toggleSort('volume')}
-                    title="Búsquedas al mes y dificultad (0-100)"
-                  >
-                    Volumen {sort === 'volume' && <SortIcon className="h-3 w-3" />}
-                  </button>
-                </th>
-                <th className="hidden p-3 md:table-cell">
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1 font-medium uppercase"
-                    onClick={() => toggleSort('gscImpressions')}
-                    title="Impresiones y posición media en Google (Search Console, 28 días)"
-                  >
-                    Google {sort === 'gscImpressions' && <SortIcon className="h-3 w-3" />}
-                  </button>
-                </th>
+                {showVolume && (
+                  <th className="hidden p-3 md:table-cell">
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 font-medium uppercase"
+                      onClick={() => toggleSort('volume')}
+                      title="Búsquedas al mes y dificultad (0-100)"
+                    >
+                      Volumen {sort === 'volume' && <SortIcon className="h-3 w-3" />}
+                    </button>
+                  </th>
+                )}
+                {showGoogle && (
+                  <th className="hidden p-3 md:table-cell">
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 font-medium uppercase"
+                      onClick={() => toggleSort('gscImpressions')}
+                      title="Impresiones y posición media en Google (Search Console, 28 días)"
+                    >
+                      Google {sort === 'gscImpressions' && <SortIcon className="h-3 w-3" />}
+                    </button>
+                  </th>
+                )}
                 <th className="hidden p-3 sm:table-cell">Intención</th>
                 <th className="p-3">Estado</th>
                 <th className="w-28 p-3" />
@@ -436,32 +443,38 @@ export function KeywordsPage() {
                       )}
                     </td>
                     <td className="p-3 tabular-nums">{k.score}</td>
-                    <td className="hidden p-3 tabular-nums md:table-cell">
-                      {k.volume === null ? (
-                        '—'
-                      ) : (
-                        <>
-                          {k.volume.toLocaleString('es-ES')}
-                          {k.difficulty !== null && (
-                            <span className="block text-xs text-stone-500">KD {k.difficulty}</span>
-                          )}
-                        </>
-                      )}
-                    </td>
-                    <td className="hidden p-3 tabular-nums md:table-cell">
-                      {k.gscImpressions === null ? (
-                        '—'
-                      ) : (
-                        <>
-                          {k.gscImpressions.toLocaleString('es-ES')} impr.
-                          {k.gscPosition !== null && (
-                            <span className="block text-xs text-stone-500">
-                              pos. {k.gscPosition.toFixed(1).replace('.', ',')}
-                            </span>
-                          )}
-                        </>
-                      )}
-                    </td>
+                    {showVolume && (
+                      <td className="hidden p-3 tabular-nums md:table-cell">
+                        {k.volume === null ? (
+                          '—'
+                        ) : (
+                          <>
+                            {k.volume.toLocaleString('es-ES')}
+                            {k.difficulty !== null && (
+                              <span className="block text-xs text-stone-500">
+                                KD {k.difficulty}
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </td>
+                    )}
+                    {showGoogle && (
+                      <td className="hidden p-3 tabular-nums md:table-cell">
+                        {k.gscImpressions === null ? (
+                          '—'
+                        ) : (
+                          <>
+                            {k.gscImpressions.toLocaleString('es-ES')} impr.
+                            {k.gscPosition !== null && (
+                              <span className="block text-xs text-stone-500">
+                                pos. {k.gscPosition.toFixed(1).replace('.', ',')}
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </td>
+                    )}
                     <td className="hidden p-3 sm:table-cell">
                       {k.intent ? <Badge>{intentLabel[k.intent] ?? k.intent}</Badge> : '—'}
                     </td>
