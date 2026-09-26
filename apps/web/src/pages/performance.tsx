@@ -30,6 +30,7 @@ import {
   useConnectSearchConsole,
   useDisconnectSearchConsole,
   useGenerate,
+  useMe,
   usePerformance,
   useSearchConsoleProperties,
   useSelectProperty,
@@ -100,6 +101,71 @@ export function PerformancePage() {
   );
 }
 
+/**
+ * Sin cliente OAuth en el servidor. Tus clientes no tienen nada que configurar (solo pulsan
+ * "Conectar con Google" y eligen su cuenta); quien lo activa, una vez, es el administrador.
+ */
+function GoogleSetupNotice() {
+  const { data: me } = useMe();
+  if (!me?.isAdmin) {
+    return (
+      <Notice tone="blue" title="La conexión con Google aún no está disponible">
+        Pronto podrás conectar tu Google Search Console aquí con un clic, sin contraseñas ni claves:
+        solo eliges tu cuenta de Google y das permiso de lectura.
+      </Notice>
+    );
+  }
+  const redirectUri = `${window.location.origin}/api/v1/integrations/google/callback`;
+  return (
+    <Card className="mb-6">
+      <h2 className="font-medium">
+        Activa la conexión con Google (solo una vez, para toda la plataforma)
+      </h2>
+      <p className="mt-1 text-sm text-stone-600 dark:text-stone-400">
+        Ni tú ni tus clientes escribís aquí usuario o contraseña de Google. El servidor necesita una
+        aplicación OAuth propia; después, cada tienda pulsa «Conectar con Google», elige su cuenta y
+        acepta el permiso de solo lectura de Search Console. Solo lo ves tú (administrador).
+      </p>
+      <ol className="mt-3 list-decimal space-y-1.5 pl-5 text-sm">
+        <li>
+          En{' '}
+          <a
+            className="text-teal-700 underline dark:text-teal-400"
+            href="https://console.cloud.google.com/"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Google Cloud Console
+          </a>{' '}
+          crea un proyecto y activa la <strong>Google Search Console API</strong>.
+        </li>
+        <li>
+          Pantalla de consentimiento OAuth: tipo <strong>Externo</strong>, añade el ámbito{' '}
+          <code>webmasters.readonly</code> y, mientras esté en modo prueba, tu correo como usuario
+          de prueba.
+        </li>
+        <li>
+          Credenciales → Crear ID de cliente OAuth → <strong>Aplicación web</strong>, con este URI
+          de redirección autorizado:
+          <code className="mt-1 block break-all rounded bg-stone-100 px-2 py-1 text-xs dark:bg-stone-800">
+            {redirectUri}
+          </code>
+        </li>
+        <li>
+          Pon el ID y el secreto en el <code>.env</code> del servidor como{' '}
+          <code>GOOGLE_CLIENT_ID</code> y <code>GOOGLE_CLIENT_SECRET</code> y reinicia la API y el
+          worker (<code>docker compose up -d api worker</code>).
+        </li>
+        <li>Vuelve aquí y pulsa «Conectar con Google».</li>
+      </ol>
+      <p className="mt-3 text-xs text-stone-500">
+        Para que cualquier cliente pueda conectarse (no solo usuarios de prueba), publica la app en
+        la pantalla de consentimiento y pasa la verificación de Google.
+      </p>
+    </Card>
+  );
+}
+
 function SearchConsoleCard({ siteId, status }: { siteId: string; status: SearchConsoleStatusDto }) {
   const connect = useConnectSearchConsole(siteId);
   const disconnect = useDisconnectSearchConsole(siteId);
@@ -107,13 +173,7 @@ function SearchConsoleCard({ siteId, status }: { siteId: string; status: SearchC
   const properties = useSearchConsoleProperties(siteId, status.connected && !status.propertyUrl);
   const select = useSelectProperty(siteId);
 
-  if (!status.configured) {
-    return (
-      <Notice tone="blue" title="La conexión con Google no está activada en este servidor">
-        El administrador debe configurar GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET.
-      </Notice>
-    );
-  }
+  if (!status.configured) return <GoogleSetupNotice />;
   if (!status.connected) {
     return (
       <EmptyState
