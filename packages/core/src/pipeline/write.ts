@@ -20,9 +20,13 @@ import { recordUsage } from './usage.js';
 
 const MAX_LINKS = 25;
 
-/** max_tokens = palabras * 2.5 + 800, con techo de 8192. */
+/**
+ * max_tokens = palabras * 4 + 1500, con techo de 16000. Medido con la API real: 2,5 tokens por
+ * palabra se quedaba corto (un artículo de 1200 palabras se truncó a 3800 tokens) porque el HTML va
+ * escapado dentro del JSON del tool y el español tokeniza peor que el inglés.
+ */
 export function maxTokensFor(wordCount: number): number {
-  return Math.min(8192, Math.round(wordCount * 2.5 + 800));
+  return Math.min(16_000, Math.round(wordCount * 4 + 1500));
 }
 
 export function runWrite(ctx: PipelineContext, info: RunInfo): Promise<void> {

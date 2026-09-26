@@ -160,11 +160,13 @@ export class ClaudeClient {
       outputTokens: response.usage.output_tokens,
     };
 
+    // Lo gastado se cobra aunque la respuesta no sirva: viaja en el error para registrarlo.
+    const spent = { model: response.model, ...usage };
     if (response.stop_reason === 'max_tokens') {
       throw new AppError(
         'AI_TRUNCATED',
         `Model output truncated at max_tokens=${input.maxTokens} (${usage.outputTokens} tokens)`,
-        { httpStatus: 502, retryable: false },
+        { httpStatus: 502, retryable: false, usage: spent },
       );
     }
 
@@ -175,6 +177,7 @@ export class ClaudeClient {
       throw new AppError('AI_INVALID_OUTPUT', 'Model did not return the expected tool call', {
         httpStatus: 502,
         retryable: true,
+        usage: spent,
       });
     }
 
@@ -184,6 +187,7 @@ export class ClaudeClient {
       throw new AppError('AI_INVALID_OUTPUT', `Tool output failed validation: ${detail}`, {
         httpStatus: 502,
         retryable: true,
+        usage: spent,
       });
     }
     return { data: parsed.data, usage, model: response.model };

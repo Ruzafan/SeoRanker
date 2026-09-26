@@ -98,9 +98,9 @@ describe('password argon2id', () => {
 });
 
 describe('cálculos', () => {
-  it('max_tokens = palabras*2.5+800 con techo 8192', () => {
-    expect(maxTokensFor(1200)).toBe(3800);
-    expect(maxTokensFor(5000)).toBe(8192);
+  it('max_tokens = palabras*4+1500 con techo 16000', () => {
+    expect(maxTokensFor(1200)).toBe(6300);
+    expect(maxTokensFor(5000)).toBe(16_000);
   });
   it('coste estimado', () => {
     expect(estimateCostCents('claude-sonnet-5', { inputTokens: 0, outputTokens: 0 })).toBe(0);

@@ -71,12 +71,11 @@ describe('ClaudeClient.callTool', () => {
     });
   });
 
-  it('lanza error explícito de truncamiento (no retryable)', async () => {
+  it('lanza error explícito de truncamiento (no retryable) con lo gastado, para registrarlo', async () => {
     const { api } = fakeApi({ ...base, stop_reason: 'max_tokens', content: [] });
-    await expect(new ClaudeClient(undefined, api).callTool(input)).rejects.toMatchObject({
-      code: 'AI_TRUNCATED',
-      retryable: false,
-    });
+    const err = await new ClaudeClient(undefined, api).callTool(input).catch((e: unknown) => e);
+    expect(err).toMatchObject({ code: 'AI_TRUNCATED', retryable: false });
+    expect((err as AppError).usage).toMatchObject({ model: expect.any(String) });
   });
 
   it('valida el input del tool con zod', async () => {
