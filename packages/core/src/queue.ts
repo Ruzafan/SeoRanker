@@ -5,6 +5,7 @@ import { AppError, errorMessage } from './errors.js';
 export const QUEUE_NAMES = {
   'brand-voice': 'brand-voice',
   discover: 'discover',
+  seeds: 'seeds',
   outline: 'outline',
   write: 'write',
   publish: 'publish',
@@ -71,6 +72,7 @@ export function createQueues(
   return {
     'brand-voice': make(QUEUE_NAMES['brand-voice']),
     discover: make(QUEUE_NAMES.discover),
+    seeds: make(QUEUE_NAMES.seeds),
     outline: make(QUEUE_NAMES.outline),
     write: make(QUEUE_NAMES.write),
     publish: make(QUEUE_NAMES.publish),

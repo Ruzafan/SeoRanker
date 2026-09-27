@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Plug, Save, Trash2 } from 'lucide-react';
+import { Loader2, Plug, Save, Sparkles, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -29,12 +29,14 @@ import {
   useAuthors,
   useMe,
   useDeleteSite,
+  useJobs,
   useSite,
+  useSuggestSeeds,
   useTestConnection,
   useUpdateSite,
   withToast,
 } from '../lib/hooks';
-import { cadenceLabel, errorMessages, warningMessages } from '../lib/i18n';
+import { cadenceLabel, errorMessages, parseJobError, warningMessages } from '../lib/i18n';
 
 const formSchema = z.object({
   name: z.string().trim().min(1, 'Obligatorio').max(100),
@@ -87,6 +89,8 @@ export function SettingsPage() {
   const { data: site } = useSite(siteId);
   const update = useUpdateSite(siteId);
   const test = useTestConnection(siteId);
+  const suggest = useSuggestSeeds(siteId);
+  const { data: jobs } = useJobs(siteId);
   const del = useDeleteSite(siteId);
   const [result, setResult] = useState<ConnectionTestDto | null>(null);
   const authors = useAuthors(siteId, !!site?.hasCredentials);
@@ -103,6 +107,10 @@ export function SettingsPage() {
   }, [site, reset]);
 
   if (!site) return <Spinner />;
+
+  const seedsJob = jobs?.items.find((j) => j.type === 'seeds');
+  const seedsRunning = seedsJob?.status === 'queued' || seedsJob?.status === 'running';
+  const seedsFailure = seedsJob?.status === 'failed' ? parseJobError(seedsJob.error) : null;
 
   const onSubmit = handleSubmit(async (v) => {
     const seeds = [
@@ -327,6 +335,38 @@ export function SettingsPage() {
           >
             <textarea className={cx(inputClass, 'min-h-28')} {...register('seedsText')} />
           </Field>
+          <div className="-mt-2 flex flex-wrap items-center gap-3">
+            <Button
+              type="button"
+              icon={Sparkles}
+              variant="secondary"
+              disabled={seedsRunning || !site.hasCredentials}
+              loading={suggest.isPending}
+              title={site.hasCredentials ? undefined : 'Conecta tu WordPress para leer la tienda'}
+              onClick={() => {
+                if (
+                  isDirty &&
+                  !window.confirm('Tienes cambios sin guardar que se perderán. ¿Continuar?')
+                )
+                  return;
+                void withToast(suggest.mutateAsync(), 'Leyendo tu tienda…');
+              }}
+            >
+              Sugerir desde mi tienda
+            </Button>
+            {seedsRunning ? (
+              <span className="inline-flex items-center gap-1.5 text-xs text-stone-500">
+                <Loader2 className="h-3 w-3 animate-spin" /> Claude está leyendo tus categorías y
+                productos; las nuevas semillas se añadirán a la lista.
+              </span>
+            ) : seedsFailure ? (
+              <span className="text-xs text-red-600 dark:text-red-400">{seedsFailure.text}</span>
+            ) : (
+              <span className="text-xs text-stone-500">
+                Añade semillas deducidas de tus categorías y productos, sin borrar las tuyas.
+              </span>
+            )}
+          </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Palabras por artículo" error={errors.wordCount?.message}>
               <input

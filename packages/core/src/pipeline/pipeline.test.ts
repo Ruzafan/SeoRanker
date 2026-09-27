@@ -521,6 +521,34 @@ describe.skipIf(!db)('pipeline (integración con Postgres)', () => {
     expect(run).toMatchObject({ status: 'succeeded', meta: { seedsGenerated: true, seeds: 2 } });
   });
 
+  it('seeds añade las sugeridas a las del usuario sin duplicar ni descubrir keywords', async () => {
+    await prisma.site.update({
+      where: { id: siteId },
+      data: { settings: { ...DEFAULT_SETTINGS, seeds: ['dioramas'] } },
+    });
+    const claude = fakeClaude({
+      'Submit the seed keywords that describe the store.': () => ({
+        seeds: [
+          { term: 'Dioramas', reason: 'ya la tiene' },
+          { term: 'figuras de resina', reason: 'categoría principal' },
+          { term: 'pintura de miniaturas', reason: 'productos' },
+        ],
+      }),
+    });
+    await dispatcher.enqueue('seeds', { siteId });
+    await drain(ctxWith(claude));
+
+    const site = await prisma.site.findUniqueOrThrow({ where: { id: siteId } });
+    expect((site.settings as { seeds: string[] }).seeds).toEqual([
+      'dioramas',
+      'figuras de resina',
+      'pintura de miniaturas',
+    ]);
+    expect(await prisma.keyword.count({ where: { siteId } })).toBe(0);
+    const run = await prisma.jobRun.findFirstOrThrow({ where: { siteId, type: 'seeds' } });
+    expect(run).toMatchObject({ status: 'succeeded', meta: { added: 2, seeds: 3 } });
+  });
+
   it('discover sin seeds ni contenido publicado falla con NO_SEEDS', async () => {
     adapter.listContent = async () => [];
     adapter.listCategories = async () => [];

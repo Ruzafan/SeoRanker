@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import {
   analyzeVoice,
+  suggestSeeds,
   batchKeywords,
   createKeywords,
   createSite,
@@ -126,6 +127,11 @@ export function resourceRoutes(deps: CoreDeps, auth: AuthHelpers) {
     app.post('/sites/:id/analyze-voice', async (req, reply) => {
       const { id } = idParam.parse(req.params);
       return reply.status(202).send(await analyzeVoice(deps, org(req), id));
+    });
+
+    app.post('/sites/:id/seeds/suggest', async (req, reply) => {
+      const { id } = idParam.parse(req.params);
+      return reply.status(202).send(await suggestSeeds(deps, org(req), id));
     });
 
     // ---- Keywords ------------------------------------------------------

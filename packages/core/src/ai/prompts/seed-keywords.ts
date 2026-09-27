@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { ContentItem } from '../../adapters/index.js';
 import { composeSystemPrompt, type SiteContext } from './shared.js';
 
-export const SEED_KEYWORDS_PROMPT_VERSION = 'seed-keywords@1';
+export const SEED_KEYWORDS_PROMPT_VERSION = 'seed-keywords@2';
 
 export const seedKeywordsSchema = z.object({
   seeds: z
@@ -30,7 +30,12 @@ export function seedKeywordsSystem(site: SiteContext): string {
   );
 }
 
-export function seedKeywordsUser(input: { categories: string[]; content: ContentItem[] }): string {
+export function seedKeywordsUser(input: {
+  categories: string[];
+  content: ContentItem[];
+  /** Seeds que el sitio ya tiene: se piden otras que las complementen. */
+  existing?: string[];
+}): string {
   const byType = (type: string) =>
     input.content.filter((c) => c.type === type).map((c) => `- ${c.title}`);
   const block = (tag: string, lines: string[]) =>
@@ -38,6 +43,9 @@ export function seedKeywordsUser(input: { categories: string[]; content: Content
   return [
     'Below is an inventory of the store: its categories and the titles of its products, pages and posts.',
     'Propose the seed keywords this store should build its content strategy on. Each seed is a short, generic search (1-4 words) that the store could rank for with helpful articles, and that will later be expanded with autocomplete. Cover every main product line; prefer terms with real search demand over internal names, SKUs or brand-specific model names. Do not include the store name, competitors or navigational queries.',
+    input.existing?.length
+      ? `The store already uses these seeds; propose different ones that cover what they miss:\n${input.existing.map((s) => `- ${s}`).join('\n')}`
+      : '',
     block(
       'categories',
       input.categories.map((c) => `- ${c}`),

@@ -3,6 +3,7 @@ import type {
   ErrorCode,
   JobType,
   KEYWORD_SOURCES,
+  KeywordIntentFilter,
   KeywordStatus,
   WarningCode,
 } from '@seo/shared';
@@ -115,6 +116,7 @@ export const jobTypeLabel: Record<JobType, string> = {
   backlink: 'Enlazado inverso',
   refresh: 'Refresco de contenido',
   'ai-visibility': 'Visibilidad en IA',
+  seeds: 'Semillas',
   watchdog: 'Vigilante',
   schedule: 'Programación',
 };
@@ -130,6 +132,13 @@ export const intentLabel: Record<string, string> = {
   informational: 'Informativa',
   commercial: 'Comercial',
   transactional: 'Transaccional',
+};
+
+export const intentFilterLabel: Record<KeywordIntentFilter, string> = {
+  buyer: 'Comerciales y transaccionales',
+  informational: 'Informativas',
+  commercial: 'Comerciales',
+  transactional: 'Transaccionales',
 };
 
 export const cadenceLabel: Record<string, string> = {

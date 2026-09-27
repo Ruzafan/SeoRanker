@@ -8,6 +8,7 @@ import { runSync } from './sync.js';
 import { runCluster } from './cluster.js';
 import { runBacklink } from './backlink.js';
 import { runRefresh } from './refresh.js';
+import { runSeeds } from './seeds.js';
 import { runAiVisibility } from './ai-visibility.js';
 import { runWrite } from './write.js';
 
@@ -23,6 +24,7 @@ export { maxTokensFor } from './write.js';
 const RUNNERS: Record<PipelineJobType, (ctx: PipelineContext, info: RunInfo) => Promise<void>> = {
   'brand-voice': runBrandVoice,
   discover: runDiscover,
+  seeds: runSeeds,
   outline: runOutline,
   write: runWrite,
   publish: runPublish,

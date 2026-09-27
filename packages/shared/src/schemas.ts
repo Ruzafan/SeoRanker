@@ -48,6 +48,11 @@ export const updateSiteSchema = z
 export type UpdateSiteInput = z.infer<typeof updateSiteSchema>;
 
 // ---- Keywords ------------------------------------------------------------
+export const KEYWORD_INTENTS = ['informational', 'commercial', 'transactional'] as const;
+/** Filtro por intención; `buyer` = comercial + transaccional (las que venden). */
+export const KEYWORD_INTENT_FILTERS = ['buyer', ...KEYWORD_INTENTS] as const;
+export type KeywordIntentFilter = (typeof KEYWORD_INTENT_FILTERS)[number];
+
 export const KEYWORD_STATUSES = [
   'pending',
   'queued',
@@ -67,7 +72,7 @@ export const patchKeywordSchema = z
   .object({
     status: z.enum(['pending', 'discarded']),
     score: z.number().int().min(0).max(100),
-    intent: z.enum(['informational', 'commercial', 'transactional']).nullable(),
+    intent: z.enum(KEYWORD_INTENTS).nullable(),
   })
   .partial();
 export type PatchKeywordInput = z.infer<typeof patchKeywordSchema>;
@@ -83,6 +88,7 @@ export const KEYWORD_SOURCES = ['manual', 'autocomplete', 'paa', 'gsc', 'import'
 export const keywordQuerySchema = z.object({
   status: z.enum(KEYWORD_STATUSES).optional(),
   source: z.enum(KEYWORD_SOURCES).optional(),
+  intent: z.enum(KEYWORD_INTENT_FILTERS).optional(),
   clusterId: z.string().min(1).max(64).optional(),
   search: z.string().trim().max(200).optional(),
   sort: z.enum(['score', 'createdAt', 'term', 'volume', 'gscImpressions']).default('score'),
@@ -134,6 +140,7 @@ export type PublishArticleInput = z.infer<typeof publishArticleSchema>;
 // ---- Jobs ----------------------------------------------------------------
 export const JOB_TYPES = [
   'discover',
+  'seeds',
   'outline',
   'write',
   'publish',

@@ -11,7 +11,13 @@ import {
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { KEYWORD_SOURCES, KEYWORD_STATUSES, type KeywordStatus } from '@seo/shared';
+import {
+  KEYWORD_INTENT_FILTERS,
+  KEYWORD_SOURCES,
+  KEYWORD_STATUSES,
+  type KeywordIntentFilter,
+  type KeywordStatus,
+} from '@seo/shared';
 import {
   Badge,
   Button,
@@ -39,7 +45,12 @@ import {
   withToast,
   type KeywordFilters,
 } from '../lib/hooks';
-import { intentLabel, keywordSourceLabel, keywordStatusLabel } from '../lib/i18n';
+import {
+  intentFilterLabel,
+  intentLabel,
+  keywordSourceLabel,
+  keywordStatusLabel,
+} from '../lib/i18n';
 
 function useDebounced<T>(value: T, ms = 300): T {
   const [v, setV] = useState(value);
@@ -56,6 +67,7 @@ export function KeywordsPage() {
   const [params] = useSearchParams();
   const [status, setStatus] = useState<KeywordStatus | ''>('');
   const [source, setSource] = useState(params.get('source') ?? '');
+  const [intent, setIntent] = useState<KeywordIntentFilter | ''>('');
   const [clusterId, setClusterId] = useState('');
   const clusters = useClusters(siteId);
   const rebuild = useRebuildClusters(siteId);
@@ -72,6 +84,7 @@ export function KeywordsPage() {
   const filters: KeywordFilters = {
     ...(status ? { status } : {}),
     ...(source ? { source } : {}),
+    ...(intent ? { intent } : {}),
     ...(clusterId ? { clusterId } : {}),
     ...(search ? { search } : {}),
     sort,
@@ -86,8 +99,8 @@ export function KeywordsPage() {
   const del = useDeleteKeyword(siteId);
   const generate = useGenerate(siteId);
 
-  useEffect(() => setPage(1), [status, source, clusterId, search, sort, order]);
-  useEffect(() => setSelected(new Set()), [status, source, clusterId, search, page]);
+  useEffect(() => setPage(1), [status, source, intent, clusterId, search, sort, order]);
+  useEffect(() => setSelected(new Set()), [status, source, intent, clusterId, search, page]);
 
   const items = data?.items ?? [];
   const allSelected = items.length > 0 && items.every((k) => selected.has(k.id));
@@ -264,6 +277,19 @@ export function KeywordsPage() {
             </option>
           ))}
         </select>
+        <select
+          className={cx(inputClass, 'sm:w-60')}
+          value={intent}
+          onChange={(e) => setIntent(e.target.value as KeywordIntentFilter | '')}
+          aria-label="Filtrar por intención"
+        >
+          <option value="">Todas las intenciones</option>
+          {KEYWORD_INTENT_FILTERS.map((i) => (
+            <option key={i} value={i}>
+              {intentFilterLabel[i]}
+            </option>
+          ))}
+        </select>
       </div>
 
       {selected.size > 0 && (
@@ -305,18 +331,18 @@ export function KeywordsPage() {
         <EmptyState
           icon={KeyRound}
           title={
-            status || source || search
+            status || source || intent || search
               ? 'Ninguna keyword coincide con el filtro'
               : 'Aún no tienes keywords'
           }
           action={
-            !status && !source && !search ? (
-              hasSeeds ? (
+            !status && !source && !intent && !search ? (
+              hasSeeds || site?.hasCredentials ? (
                 <Button
                   icon={Compass}
                   onClick={() => void withToast(discover.mutateAsync(), 'Descubrimiento en marcha')}
                 >
-                  Descubrir desde mis semillas
+                  {hasSeeds ? 'Descubrir desde mis semillas' : 'Descubrir desde mi tienda'}
                 </Button>
               ) : (
                 <Link to="../settings">
@@ -326,11 +352,13 @@ export function KeywordsPage() {
             ) : undefined
           }
         >
-          {status || source || search
-            ? 'Prueba con otro estado o quita la búsqueda.'
+          {status || source || intent || search
+            ? 'Prueba con otros filtros o quita la búsqueda.'
             : hasSeeds
               ? 'Descubre keywords a partir de tus semillas: Google Autocomplete las expande y Claude las puntúa.'
-              : 'Añade keywords semilla en Ajustes (los temas de tu sitio) y descubriremos decenas de keywords puntuadas. También puedes pegarlas a mano con «Añadir».'}
+              : site?.hasCredentials
+                ? 'Claude deducirá las semillas de tus categorías y productos (podrás ajustarlas en Ajustes), Google Autocomplete las expandirá y Claude puntuará cada keyword.'
+                : 'Añade keywords semilla en Ajustes (los temas de tu sitio) y descubriremos decenas de keywords puntuadas. También puedes pegarlas a mano con «Añadir».'}
         </EmptyState>
       )}
 

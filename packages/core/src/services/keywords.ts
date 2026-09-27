@@ -26,6 +26,11 @@ export async function listKeywords(
   const where: Prisma.KeywordWhereInput = {
     ...(q.status ? { status: q.status } : {}),
     ...(q.source ? { source: q.source } : {}),
+    ...(q.intent === 'buyer'
+      ? { intent: { in: ['commercial', 'transactional'] } }
+      : q.intent
+        ? { intent: q.intent }
+        : {}),
     ...(q.clusterId ? { clusterId: q.clusterId } : {}),
     ...(q.search ? { term: { contains: q.search, mode: 'insensitive' } } : {}),
   };

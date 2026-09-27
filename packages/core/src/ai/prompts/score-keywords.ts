@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { composeSystemPrompt, type SiteContext } from './shared.js';
 
-export const SCORE_KEYWORDS_PROMPT_VERSION = 'score-keywords@1';
+export const SCORE_KEYWORDS_PROMPT_VERSION = 'score-keywords@2';
 
 export const scoreKeywordsSchema = z.object({
   keywords: z.array(
@@ -43,6 +43,14 @@ export function scoreKeywordsUser(seeds: string[], candidates: string[]): string
   return [
     `The site's niche is described by these seed keywords: ${seeds.map((s) => `"${s}"`).join(', ')}.`,
     'Evaluate every candidate below. Set keep=false for: gibberish or typos, topics unrelated to the niche, navigational queries for other brands or competitors, and queries that cannot be answered by a helpful article. For the rest, score 0-100 by how valuable an article would be for this site (relevance to the niche, likely search demand, realistic ability to rank, commercial value) and classify the search intent.',
+    [
+      'Score on this scale and use all of it:',
+      '- 80-100: squarely in the niche and either close to a purchase of what the site sells or a frequent question the site is the natural answer to.',
+      '- 60-79: clearly in the niche with a reasonable mix of demand, commercial value and ability to rank.',
+      '- 40-59: relevant but generic, highly competitive, or with little value for the business.',
+      '- 0-39: only loosely related; worth an article only if nothing better exists.',
+      'Specific long-tail queries are easier to rank for and convert better: do not penalize them for having a smaller audience. A well-chosen candidate list for this niche should have many scores above 60.',
+    ].join('\n'),
     'Return one entry per candidate, using the candidate text exactly as given.',
     `<candidates>\n${candidates.map((c) => `- ${c}`).join('\n')}\n</candidates>`,
   ].join('\n\n');

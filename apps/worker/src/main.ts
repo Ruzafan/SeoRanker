@@ -24,6 +24,7 @@ const REDACT = ['*.password', '*.credentials', '*.apiKey', '*.authorization', '*
 const PIPELINE_TYPES: PipelineJobType[] = [
   'brand-voice',
   'discover',
+  'seeds',
   'outline',
   'write',
   'publish',

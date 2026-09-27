@@ -620,6 +620,7 @@ describe.skipIf(!db)('API (integración con Postgres)', () => {
         ['delete', `/api/v1/sites/${site.id}`],
         ['post', `/api/v1/sites/${site.id}/test-connection`],
         ['post', `/api/v1/sites/${site.id}/analyze-voice`],
+        ['post', `/api/v1/sites/${site.id}/seeds/suggest`],
         ['get', `/api/v1/sites/${site.id}/authors`],
         ['get', `/api/v1/sites/${site.id}/clusters`],
         ['post', `/api/v1/sites/${site.id}/clusters/rebuild`],

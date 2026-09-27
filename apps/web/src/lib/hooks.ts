@@ -196,6 +196,7 @@ export function useRefreshWhenIdle(siteId: string) {
 export interface KeywordFilters {
   status?: string;
   source?: string;
+  intent?: string;
   clusterId?: string;
   search?: string;
   sort: 'score' | 'createdAt' | 'term' | 'volume' | 'gscImpressions';
@@ -250,6 +251,8 @@ export const useGenerate = (siteId: string) =>
   useSiteMutation(siteId, (keywordId: string) =>
     api.post<EnqueuedDto>(`/keywords/${keywordId}/generate`),
   );
+export const useSuggestSeeds = (siteId: string) =>
+  useSiteMutation(siteId, () => api.post<EnqueuedDto>(`/sites/${siteId}/seeds/suggest`));
 export const useAnalyzeVoice = (siteId: string) =>
   useSiteMutation(siteId, () => api.post<EnqueuedDto>(`/sites/${siteId}/analyze-voice`));
 

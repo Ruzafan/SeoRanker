@@ -190,6 +190,19 @@ export async function analyzeVoice(
   return deps.dispatcher.enqueue('brand-voice', { siteId: site.id });
 }
 
+/** Sugiere seeds a partir del contenido de la tienda y las añade a las que ya hay. */
+export async function suggestSeeds(
+  deps: CoreDeps,
+  organizationId: string,
+  siteId: string,
+): Promise<EnqueuedDto> {
+  const site = await requireSite(deps.prisma, organizationId, siteId);
+  if (!readCredentials(site.credentials, deps.encryptionKey)) {
+    throw new AppError('NO_CREDENTIALS', 'Site has no credentials', { httpStatus: 400 });
+  }
+  return deps.dispatcher.enqueue('seeds', { siteId: site.id });
+}
+
 export async function discoverKeywords(
   deps: CoreDeps,
   organizationId: string,
