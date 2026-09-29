@@ -340,9 +340,16 @@ export class WordPressAdapter implements PublishingAdapter {
   async updatePost(
     id: number,
     input: Partial<CreatePostInput>,
-  ): Promise<{ warnings?: WarningCode[] }> {
-    await this.request<WpPost>(`/posts/${id}`, { method: 'POST', body: this.toBody(input) });
-    return { warnings: await this.applySeo(id, input.seo) };
+  ): Promise<{ url?: string; warnings?: WarningCode[] }> {
+    const post = await this.request<WpPost>(`/posts/${id}`, {
+      method: 'POST',
+      body: this.toBody(input),
+    });
+    // Al pasar de borrador a publicado, `?p=123` se convierte en el permalink.
+    return {
+      ...(post.link ? { url: post.link } : {}),
+      warnings: await this.applySeo(id, input.seo),
+    };
   }
 
   /**

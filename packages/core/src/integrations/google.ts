@@ -222,13 +222,21 @@ function emailFromIdToken(idToken: unknown): string | null {
   }
 }
 
-/** Clave comparable de una URL: sin protocolo, sin www, sin query/hash y sin barra final. */
+const WP_ID_PARAMS = ['p', 'page_id'] as const;
+
+/**
+ * Clave comparable de una URL: sin protocolo, sin www, sin hash, sin barra final y sin query
+ * salvo el id de post de WordPress.
+ */
 export function urlKey(url: string): string {
   try {
     const u = new URL(url);
     const host = u.hostname.toLowerCase().replace(/^www\./, '');
     const path = decodeURIComponent(u.pathname).replace(/\/+$/, '');
-    return `${host}${path}`;
+    // `?p=123` / `?page_id=123` identifican el post (borradores, enlaces planos): sin ellos, la URL
+    // de un borrador sería la de la home y se le atribuiría su tráfico y sus ventas.
+    const id = WP_ID_PARAMS.map((p) => [p, u.searchParams.get(p)] as const).find(([, v]) => v);
+    return id ? `${host}${path}?${id[0]}=${id[1]}` : `${host}${path}`;
   } catch {
     return url.trim().toLowerCase();
   }

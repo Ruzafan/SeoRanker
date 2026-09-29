@@ -85,7 +85,7 @@ export interface PublishingAdapter {
   updatePost(
     id: number,
     input: Partial<CreatePostInput>,
-  ): Promise<{ warnings?: WarningCode[] } | void>;
+  ): Promise<{ url?: string; warnings?: WarningCode[] } | void>;
   /** Productos de la tienda que encajan con `query` (WooCommerce); [] si no hay tienda. */
   searchProducts(query: string, limit: number): Promise<StoreProduct[]>;
   /** Usuarios que pueden firmar artículos. */

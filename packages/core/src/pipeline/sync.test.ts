@@ -19,6 +19,11 @@ describe('utilidades de Search Console', () => {
     expect(urlKey('https://www.Tienda.es/guia/?utm=x#a')).toBe('tienda.es/guia');
     expect(urlKey('http://tienda.es/guia')).toBe('tienda.es/guia');
   });
+  it('urlKey conserva el id de post de WordPress: un borrador no es la home', () => {
+    expect(urlKey('https://tienda.es/es/?p=1686')).toBe('tienda.es/es?p=1686');
+    expect(urlKey('https://tienda.es/?page_id=7&utm=x')).toBe('tienda.es?page_id=7');
+    expect(urlKey('https://tienda.es/es/?p=1686')).not.toBe(urlKey('https://tienda.es/es/'));
+  });
   it('matchProperty prefiere la propiedad de dominio y si no el prefijo más largo', () => {
     const props = ['https://tienda.es/', 'https://tienda.es/blog/', 'https://otra.com/'];
     expect(matchProperty('https://tienda.es', [...props, 'sc-domain:tienda.es'])).toBe(
@@ -155,6 +160,7 @@ describe.skipIf(!db)('sync (integración con Postgres)', () => {
             status: 'published',
             remotePostId: n,
             remoteUrl: `https://tienda.es/?p=${n}`,
+            publishedAt: new Date(Date.now() - 100 * DAY),
           },
         }),
       ),
@@ -332,6 +338,75 @@ describe.skipIf(!db)('sync (integración con Postgres)', () => {
     expect(perf.opportunities.map((o) => o.term)).toEqual(['figuras de resina baratas']);
     expect(perf.revenueEnabled).toBe(true);
     expect(perf.daily).toHaveLength(60);
+  });
+
+  it('un borrador (?p=) no se queda el tráfico ni las ventas de la home, ni pedidos anteriores', async () => {
+    const draft = await prisma.article.create({
+      data: {
+        siteId,
+        title: 'Borrador',
+        slug: 'borrador',
+        status: 'published',
+        remotePostId: 9,
+        remoteUrl: 'https://tienda.es/es/?p=9',
+        publishedAt: new Date(Date.now() - 3 * DAY),
+      },
+    });
+    posts = [{ id: 9, url: 'https://tienda.es/es/?p=9', status: 'draft' }];
+    const recent = iso(new Date(Date.now() - 2 * DAY));
+    gscRows = (body) =>
+      body.dimensions.join() === 'date,page'
+        ? [
+            {
+              keys: [recent, 'https://tienda.es/es/'],
+              clicks: 5,
+              impressions: 50,
+              ctr: 0,
+              position: 2,
+            },
+          ]
+        : [];
+    orders = [
+      {
+        id: '30',
+        total: 14.95,
+        currency: 'EUR',
+        createdAt: new Date().toISOString(),
+        entry: 'https://tienda.es/es/',
+        sourceType: 'organic',
+      },
+    ];
+    await runSync();
+    expect(await prisma.articleMetric.count({ where: { articleId: draft.id } })).toBe(0);
+    expect(await prisma.articleConversion.count({ where: { siteId } })).toBe(0);
+
+    // Ya publicado con permalink: un pedido de antes de publicarlo tampoco es suyo.
+    posts = [{ id: 9, url: 'https://tienda.es/es/borrador/', status: 'publish' }];
+    orders = [
+      {
+        id: '31',
+        total: 20,
+        currency: 'EUR',
+        createdAt: new Date(Date.now() - 5 * DAY).toISOString(),
+        entry: 'https://tienda.es/es/borrador/',
+        sourceType: 'organic',
+      },
+      {
+        id: '32',
+        total: 30,
+        currency: 'EUR',
+        createdAt: new Date().toISOString(),
+        entry: 'https://tienda.es/es/borrador/',
+        sourceType: 'organic',
+      },
+    ];
+    await prisma.site.update({
+      where: { id: siteId },
+      data: { settings: { ...DEFAULT_SETTINGS, woocommerce: true } },
+    });
+    await runSync();
+    const conv = await prisma.articleConversion.findMany({ where: { siteId } });
+    expect(conv.map((c) => c.orderId)).toEqual(['32']);
   });
 
   it('sin plan con ventas atribuidas no lee pedidos; token revocado queda anotado en la conexión', async () => {

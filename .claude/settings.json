@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ssh -i key root@195.35.25.64 *)"
+    ]
+  }
+}

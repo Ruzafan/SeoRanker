@@ -86,7 +86,7 @@ export function runPublish(ctx: PipelineContext, info: RunInfo): Promise<void> {
         const res = await adapter.updatePost(article.remotePostId, input);
         warnings = (res && 'warnings' in res ? res.warnings : undefined) ?? [];
         remoteId = article.remotePostId;
-        remoteUrl = article.remoteUrl ?? '';
+        remoteUrl = (res && 'url' in res ? res.url : undefined) ?? article.remoteUrl ?? '';
       } else {
         const res = await adapter.createPost(input);
         warnings = res.warnings ?? [];

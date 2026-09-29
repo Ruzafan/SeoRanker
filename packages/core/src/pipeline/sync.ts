@@ -155,13 +155,27 @@ async function syncSearchConsole(ctx: PipelineContext, site: Site, now: Date): P
   }
 }
 
-async function articlesByUrl(ctx: PipelineContext, siteId: string): Promise<Map<string, string>> {
+/** Artículo de una URL y desde cuándo existe: lo anterior (tráfico, pedidos) no es suyo. */
+interface UrlArticle {
+  id: string;
+  since: Date;
+}
+
+async function articlesByUrl(
+  ctx: PipelineContext,
+  siteId: string,
+): Promise<Map<string, UrlArticle>> {
   const articles = await siteScope(ctx.prisma, siteId).articles.findMany({
     where: { remoteUrl: { not: null } },
-    select: { id: true, remoteUrl: true },
+    select: { id: true, remoteUrl: true, publishedAt: true, createdAt: true },
   });
   return new Map(
-    articles.filter((a) => a.remoteUrl).map((a) => [urlKey(a.remoteUrl as string), a.id]),
+    articles
+      .filter((a) => a.remoteUrl)
+      .map((a) => [
+        urlKey(a.remoteUrl as string),
+        { id: a.id, since: a.publishedAt ?? a.createdAt },
+      ]),
   );
 }
 
@@ -170,7 +184,7 @@ async function storeMetrics(
   ctx: PipelineContext,
   siteId: string,
   rows: SearchAnalyticsRow[],
-  byUrl: Map<string, string>,
+  byUrl: Map<string, UrlArticle>,
   start: Date,
   end: Date,
 ): Promise<{ rows: number; stored: number }> {
@@ -181,8 +195,9 @@ async function storeMetrics(
   >();
   for (const r of rows) {
     const [date, page] = r.keys;
-    const articleId = page ? byUrl.get(urlKey(page)) : undefined;
-    if (!date || !articleId) continue;
+    const article = page ? byUrl.get(urlKey(page)) : undefined;
+    if (!date || !article || date < isoDate(article.since)) continue;
+    const articleId = article.id;
     const key = `${articleId}|${date}`;
     const cur = agg.get(key) ?? {
       articleId,
@@ -247,7 +262,7 @@ async function storeOpportunities(
   ctx: PipelineContext,
   site: Site,
   rows: SearchAnalyticsRow[],
-  byUrl: Map<string, string>,
+  byUrl: Map<string, UrlArticle>,
 ): Promise<{ queries: number; updated: number; created: number }> {
   const byTerm = new Map<string, QueryAgg>();
   for (const r of rows) {
@@ -440,11 +455,15 @@ async function syncOrders(ctx: PipelineContext, site: Site, now: Date): Promise<
     if (!res) return { skipped: 'NOT_SUPPORTED' };
     seen += res.orders.length;
     const data = res.orders
-      .map((o) => ({ o, articleId: o.entry ? byUrl.get(urlKey(o.entry)) : undefined }))
-      .filter((x): x is { o: (typeof res.orders)[number]; articleId: string } => !!x.articleId)
-      .map(({ o, articleId }) => ({
+      .map((o) => ({ o, article: o.entry ? byUrl.get(urlKey(o.entry)) : undefined }))
+      // Un pedido anterior al artículo no pudo empezar en él (p. ej. la URL era otra cosa).
+      .filter(
+        (x): x is { o: (typeof res.orders)[number]; article: UrlArticle } =>
+          !!x.article && new Date(x.o.createdAt) >= x.article.since,
+      )
+      .map(({ o, article }) => ({
         siteId: site.id,
-        articleId,
+        articleId: article.id,
         orderId: o.id,
         total: o.total,
         currency: o.currency,
