@@ -84,6 +84,7 @@ model Site {
   aiChecks      AiVisibilityCheck[]
   metrics       ArticleMetric[]
   conversions   ArticleConversion[]
+  visits        ArticleVisit[]
 
   @@index([organizationId])
 }
@@ -161,6 +162,7 @@ model Article {
 
   metrics     ArticleMetric[]
   conversions ArticleConversion[]
+  visits      ArticleVisit[]
   linksOut    InternalLink[] @relation("linkFrom")
   linksIn     InternalLink[] @relation("linkTo")
   comments    ArticleComment[]
@@ -254,9 +256,29 @@ model ArticleConversion {
   total     Float
   currency  String
   orderedAt DateTime
+  /// Procedencia de la visita que acabó en el pedido: canal (TRAFFIC_CHANNELS) y dominio/utm.
+  channel   String?
+  source    String?
 
   @@unique([siteId, orderId])
   @@index([siteId, orderedAt])
+}
+
+/// Visitas que entraron por un artículo (contadas por el conector), por día y procedencia.
+model ArticleVisit {
+  id        String   @id @default(cuid())
+  siteId    String
+  site      Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  articleId String
+  article   Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  date      DateTime @db.Date
+  /// Dominio de referencia sin www, `utm:<fuente>`, '' (directo) u `other`.
+  source    String
+  channel   String
+  visits    Int
+
+  @@unique([articleId, date, source])
+  @@index([siteId, date])
 }
 
 model JobRun {

@@ -4,6 +4,7 @@ import type {
   JobType,
   KEYWORD_SOURCES,
   KeywordIntentFilter,
+  TrafficChannel,
   KeywordStatus,
   WarningCode,
 } from '@seo/shared';
@@ -139,6 +140,15 @@ export const intentFilterLabel: Record<KeywordIntentFilter, string> = {
   informational: 'Informativas',
   commercial: 'Comerciales',
   transactional: 'Transaccionales',
+};
+
+export const trafficChannelLabel: Record<TrafficChannel, string> = {
+  google: 'Google',
+  ai: 'Asistentes de IA',
+  search: 'Otros buscadores',
+  social: 'Redes sociales',
+  referral: 'Otras webs',
+  direct: 'Directo',
 };
 
 export const cadenceLabel: Record<string, string> = {

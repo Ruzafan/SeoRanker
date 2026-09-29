@@ -2,7 +2,7 @@
 Requires at least: 5.6
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.1.0
+Stable tag: 1.2.0
 License: GPLv2 or later
 
 Conecta tu tienda WordPress/WooCommerce con SEO Autopilot.
@@ -23,6 +23,10 @@ No guarda datos, no llama a servicios externos y no añade nada al front salvo e
 3. En SEO Autopilot: Ajustes → Probar conexión.
 
 == Changelog ==
+
+= 1.2.0 =
+* Visitas que entran por cada artículo generado y su procedencia (Google, asistentes de IA, redes...), sin cookies.
+* Procedencia (utm_source) de los pedidos atribuidos.
 
 = 1.1.0 =
 * Pedidos atribuidos a la página de entrada (WooCommerce 8.5+).

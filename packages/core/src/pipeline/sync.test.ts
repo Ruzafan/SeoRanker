@@ -3,7 +3,12 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { resetDatabase, setupTestDatabase } from '@seo/db/testing';
 import type { PrismaClient } from '@seo/db';
 import { DEFAULT_SETTINGS } from '@seo/shared';
-import type { AttributedOrder, PostInfo, PublishingAdapter } from '../adapters/index.js';
+import type {
+  AttributedOrder,
+  PostInfo,
+  PostVisits,
+  PublishingAdapter,
+} from '../adapters/index.js';
 import type { ClaudeClient } from '../ai/claude.js';
 import { encryptJson } from '../crypto.js';
 import { matchProperty, urlKey } from '../integrations/google.js';
@@ -64,6 +69,7 @@ describe.skipIf(!db)('sync (integración con Postgres)', () => {
   let orgId: string;
   let posts: PostInfo[];
   let orders: AttributedOrder[];
+  let visits: PostVisits[] | null;
   let gscCalls: { url: string; body: unknown }[];
   let gscRows: (body: { dimensions: string[] }) => unknown[];
   let tokenStatus = 200;
@@ -72,6 +78,7 @@ describe.skipIf(!db)('sync (integración con Postgres)', () => {
     ({
       getPostsInfo: async (ids: number[]) => posts.filter((p) => ids.includes(p.id)),
       listAttributedOrders: async () => ({ orders, hasMore: false }),
+      listVisits: async () => visits,
     }) as unknown as PublishingAdapter;
 
   const fetchFn = (async (u: string | URL | Request, init?: RequestInit) => {
@@ -146,6 +153,7 @@ describe.skipIf(!db)('sync (integración con Postgres)', () => {
     });
     posts = [];
     orders = [];
+    visits = null;
   });
   afterAll(async () => prisma.$disconnect());
 
@@ -407,6 +415,75 @@ describe.skipIf(!db)('sync (integración con Postgres)', () => {
     await runSync();
     const conv = await prisma.articleConversion.findMany({ where: { siteId } });
     expect(conv.map((c) => c.orderId)).toEqual(['32']);
+  });
+
+  it('guarda las visitas por artículo con su canal y la procedencia de los pedidos', async () => {
+    const art = await prisma.article.create({
+      data: {
+        siteId,
+        title: 'Guía',
+        slug: 'guia',
+        status: 'published',
+        remotePostId: 5,
+        remoteUrl: 'https://tienda.es/guia/',
+        publishedAt: new Date(Date.now() - 10 * DAY),
+      },
+    });
+    posts = [{ id: 5, url: 'https://tienda.es/guia/', status: 'publish' }];
+    gscRows = () => [];
+    const day = iso(new Date(Date.now() - DAY));
+    visits = [
+      { postId: 5, date: day, source: 'google.es', visits: 7 },
+      { postId: 5, date: day, source: 'chatgpt.com', visits: 2 },
+      { postId: 5, date: day, source: '', visits: 1 },
+      // Antes de publicarse y de un post que no es nuestro: fuera.
+      { postId: 5, date: iso(new Date(Date.now() - 30 * DAY)), source: 'google.es', visits: 9 },
+      { postId: 99, date: day, source: 'google.es', visits: 3 },
+    ];
+    orders = [
+      {
+        id: '40',
+        total: 25,
+        currency: 'EUR',
+        createdAt: new Date().toISOString(),
+        entry: 'https://tienda.es/guia/',
+        sourceType: 'utm',
+        utmSource: 'ChatGPT.com',
+        referrer: '',
+      },
+      {
+        id: '41',
+        total: 10,
+        currency: 'EUR',
+        createdAt: new Date().toISOString(),
+        entry: 'https://tienda.es/guia/',
+        sourceType: 'organic',
+        referrer: 'https://www.google.es/',
+      },
+    ];
+    const run = await runSync();
+    expect(run.meta).toMatchObject({ visits: { rows: 5, stored: 3 } });
+    const stored = await prisma.articleVisit.findMany({
+      where: { articleId: art.id },
+      orderBy: { visits: 'desc' },
+    });
+    expect(stored.map((v) => [v.source, v.channel, v.visits])).toEqual([
+      ['google.es', 'google', 7],
+      ['chatgpt.com', 'ai', 2],
+      ['', 'direct', 1],
+    ]);
+    const conv = await prisma.articleConversion.findMany({
+      where: { siteId },
+      orderBy: { orderId: 'asc' },
+    });
+    expect(conv.map((c) => [c.orderId, c.channel, c.source])).toEqual([
+      ['40', 'ai', 'utm:chatgpt.com'],
+      ['41', 'google', 'google.es'],
+    ]);
+
+    // Segunda pasada: reemplaza, no duplica.
+    await runSync();
+    expect(await prisma.articleVisit.count({ where: { siteId } })).toBe(3);
   });
 
   it('sin plan con ventas atribuidas no lee pedidos; token revocado queda anotado en la conexión', async () => {

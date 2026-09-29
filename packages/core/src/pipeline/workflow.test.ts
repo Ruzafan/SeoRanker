@@ -402,7 +402,16 @@ describe.skipIf(!db)('flujo editorial y organización', () => {
         status: 'published',
         publishedAt: new Date('2026-08-10T10:00:00Z'),
         remoteUrl: 'https://t.es/g/',
+        remoteStatus: 'publish',
       },
+    });
+    await prisma.articleVisit.createMany({
+      data: [
+        { source: 'google.es', channel: 'google', visits: 20 },
+        { source: 'chatgpt.com', channel: 'ai', visits: 4 },
+        { source: 'utm:perplexity', channel: 'ai', visits: 1 },
+        { source: '', channel: 'direct', visits: 2 },
+      ].map((v) => ({ ...v, siteId, articleId: a.id, date: new Date('2026-08-12') })),
     });
     await prisma.searchConsoleConnection.create({
       data: { siteId, credentials: 'x', propertyUrl: 'sc-domain:t.es' },
@@ -435,6 +444,8 @@ describe.skipIf(!db)('flujo editorial y organización', () => {
         total: 50,
         currency: 'EUR',
         orderedAt: new Date('2026-08-15'),
+        channel: 'ai',
+        source: 'chatgpt.com',
       },
     });
     const r = await getMonthlyReport(deps(), orgId, siteId, '2026-08');
@@ -442,7 +453,33 @@ describe.skipIf(!db)('flujo editorial y organización', () => {
     expect(r.published.map((p) => p.title)).toEqual(['Guía']);
     expect(r.search).toMatchObject({ clicks: 30, previousClicks: 10, position: 6 });
     expect(r.topArticles[0]).toMatchObject({ title: 'Guía', clicks: 30 });
-    expect(r.revenue).toEqual({ total: 50, orders: 1, currency: 'EUR' });
+    expect(r.revenue).toEqual({
+      total: 50,
+      orders: 1,
+      currency: 'EUR',
+      byChannel: [{ channel: 'ai', orders: 1, total: 50 }],
+    });
+    expect(r.traffic).toMatchObject({
+      total: 27,
+      byChannel: [
+        { channel: 'google', visits: 20 },
+        { channel: 'ai', visits: 5 },
+        { channel: 'direct', visits: 2 },
+      ],
+      assistants: [
+        { name: 'ChatGPT', visits: 4 },
+        { name: 'Perplexity', visits: 1 },
+      ],
+    });
+    expect(r.articles).toEqual([
+      expect.objectContaining({
+        title: 'Guía',
+        google: { clicks: 30, impressions: 300, position: 6 },
+        visits: 27,
+        orders: 1,
+        revenue: 50,
+      }),
+    ]);
 
     await prisma.organization.update({ where: { id: orgId }, data: { plan: 'pro' } });
     await expect(

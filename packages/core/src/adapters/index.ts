@@ -63,6 +63,18 @@ export interface AttributedOrder {
   createdAt: string;
   entry: string;
   sourceType: string;
+  /** URL de referencia de la visita (vacía si fue directa). */
+  referrer?: string;
+  /** utm_source de la visita (conector 1.2.0+). */
+  utmSource?: string;
+}
+
+/** Visitas que entraron por un post, por día (YYYY-MM-DD) y procedencia (conector 1.2.0+). */
+export interface PostVisits {
+  postId: number;
+  date: string;
+  source: string;
+  visits: number;
 }
 
 export interface ConnectionResult {
@@ -97,6 +109,8 @@ export interface PublishingAdapter {
     after: Date,
     page: number,
   ): Promise<{ orders: AttributedOrder[]; hasMore: boolean } | null>;
+  /** Visitas desde `after` (YYYY-MM-DD); null si el conector no las cuenta. */
+  listVisits(after: string): Promise<PostVisits[] | null>;
 }
 
 export { WordPressAdapter, type WordPressAdapterOptions } from './wordpress.js';

@@ -7,7 +7,9 @@ export const SEO_PLUGINS = ['yoast', 'rankmath'] as const;
 export type SeoPlugin = (typeof SEO_PLUGINS)[number];
 
 /** Versión del plugin de WordPress que distribuye el panel (apps/wp-plugin). */
-export const CONNECTOR_VERSION = '1.1.0';
+export const CONNECTOR_VERSION = '1.2.0';
+/** Primera versión del conector que cuenta las visitas por artículo y su procedencia. */
+export const CONNECTOR_VERSION_VISITS = '1.2.0';
 
 /** true si la versión `a` (x.y.z) es anterior a `b`. Lo no numérico cuenta como 0. */
 export function isOlderVersion(a: string, b: string): boolean {

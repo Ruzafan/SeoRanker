@@ -1,5 +1,6 @@
 import type { Site } from '@seo/db';
-import { parseSettings, planFor } from '@seo/shared';
+import { parseSettings, planFor, referrerHost, trafficChannel } from '@seo/shared';
+import type { AttributedOrder } from '../adapters/index.js';
 import { decryptJson } from '../crypto.js';
 import { errorCode, errorMessage } from '../errors.js';
 import { GoogleClient, urlKey, type SearchAnalyticsRow } from '../integrations/google.js';
@@ -27,6 +28,8 @@ const DECAY_MIN_BASE_CLICKS = 10;
 const DECAY_RATIO = 0.7;
 const RECOVERED_RATIO = 0.9;
 const ORDERS_INITIAL_DAYS = 90;
+/** El conector guarda 120 días de visitas: se releen enteros (son pocos datos y así se corrigen). */
+const VISITS_DAYS = 120;
 const MAX_ORDER_PAGES = 20;
 
 export const isoDate = (d: Date): string => d.toISOString().slice(0, 10);
@@ -54,6 +57,7 @@ export function runSync(ctx: PipelineContext, info: RunInfo): Promise<void> {
     await part('posts', () => syncPosts(ctx, site));
     await part('searchConsole', () => syncSearchConsole(ctx, site, now));
     await part('orders', () => syncOrders(ctx, site, now));
+    await part('visits', () => syncVisits(ctx, site, now));
     await part('keywordMetrics', () => syncKeywordMetrics(ctx, site));
     return { meta };
   });
@@ -468,10 +472,18 @@ async function syncOrders(ctx: PipelineContext, site: Site, now: Date): Promise<
         total: o.total,
         currency: o.currency,
         orderedAt: new Date(o.createdAt),
+        ...orderSource(o),
       }));
     if (data.length) {
       attributed += (await ctx.prisma.articleConversion.createMany({ data, skipDuplicates: true }))
         .count;
+      // Pedidos ya guardados antes de conocer su procedencia.
+      for (const d of data) {
+        await ctx.prisma.articleConversion.updateMany({
+          where: { siteId: site.id, orderId: d.orderId, channel: null },
+          data: { channel: d.channel, source: d.source },
+        });
+      }
     }
     if (!res.hasMore) break;
   }
@@ -481,4 +493,57 @@ async function syncOrders(ctx: PipelineContext, site: Site, now: Date): Promise<
     data: { settings: { ...latest, ordersSyncedAt: now.toISOString() } },
   });
   return { seen, attributed };
+}
+
+/** Procedencia de la visita que acabó en el pedido, con el mismo formato que las visitas. */
+export function orderSource(o: AttributedOrder): { channel: string; source: string } {
+  const source =
+    o.sourceType === 'typein'
+      ? ''
+      : o.utmSource
+        ? `utm:${o.utmSource.toLowerCase()}`
+        : referrerHost(o.referrer ?? '');
+  return { channel: trafficChannel(source), source };
+}
+
+/**
+ * Visitas que entraron por cada artículo, contadas por el conector (1.2.0+) con su procedencia:
+ * Google, asistentes de IA, redes... Se reemplaza el rango entero en cada pasada.
+ */
+async function syncVisits(ctx: PipelineContext, site: Site, now: Date): Promise<unknown> {
+  const from = dayStart(daysAgo(now, VISITS_DAYS));
+  const rows = await adapterFor(ctx, site).listVisits(isoDate(from));
+  if (!rows) return { skipped: 'NOT_SUPPORTED' };
+  const articles = await siteScope(ctx.prisma, site.id).articles.findMany({
+    where: { remotePostId: { not: null } },
+    select: { id: true, remotePostId: true, publishedAt: true, createdAt: true },
+  });
+  const byPost = new Map(
+    articles.map((a) => [
+      a.remotePostId as number,
+      { id: a.id, since: a.publishedAt ?? a.createdAt },
+    ]),
+  );
+  const data = rows.flatMap((r) => {
+    const article = byPost.get(r.postId);
+    if (!article || !/^\d{4}-\d{2}-\d{2}$/.test(r.date) || r.date < isoDate(article.since))
+      return [];
+    if (!Number.isFinite(r.visits) || r.visits <= 0) return [];
+    const source = r.source.slice(0, 120);
+    return [
+      {
+        siteId: site.id,
+        articleId: article.id,
+        date: new Date(`${r.date}T00:00:00.000Z`),
+        source,
+        channel: trafficChannel(source),
+        visits: Math.round(r.visits),
+      },
+    ];
+  });
+  await ctx.prisma.$transaction([
+    ctx.prisma.articleVisit.deleteMany({ where: { siteId: site.id, date: { gte: from } } }),
+    ctx.prisma.articleVisit.createMany({ data, skipDuplicates: true }),
+  ]);
+  return { rows: rows.length, stored: data.length };
 }

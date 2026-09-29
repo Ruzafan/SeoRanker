@@ -5,6 +5,7 @@ import type {
   StoreProduct,
   ConnectionResult,
   PostInfo,
+  PostVisits,
   ContentItem,
   ContentSample,
   CreatePostInput,
@@ -45,5 +46,8 @@ export class ShopifyAdapter implements PublishingAdapter {
     _page: number,
   ): Promise<{ orders: AttributedOrder[]; hasMore: boolean } | null> {
     throw new NotImplementedError('ShopifyAdapter.listAttributedOrders');
+  }
+  listVisits(_after: string): Promise<PostVisits[] | null> {
+    throw new NotImplementedError('ShopifyAdapter.listVisits');
   }
 }

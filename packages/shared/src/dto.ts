@@ -1,6 +1,7 @@
 import type { ArticleStatus, JobType, KeywordStatus } from './schemas.js';
 import type { SeoPlugin, SiteSettings } from './settings.js';
 import type { WarningCode } from './errors.js';
+import type { TrafficChannel } from './traffic.js';
 
 /** Todas las fechas viajan como ISO string. Nunca se incluye `credentials`. */
 export interface UserDto {
@@ -379,6 +380,19 @@ export interface BrandingDto {
 }
 
 /** Informe mensual de una tienda (imprimible, con marca blanca en Agency). */
+export interface ReportArticleDto {
+  id: string;
+  title: string;
+  url: string | null;
+  publishedAt: string;
+  /** Google en el mes (Search Console); null si no está conectado. */
+  google: { clicks: number; impressions: number; position: number | null } | null;
+  visits: number;
+  visitsByChannel: { channel: TrafficChannel; visits: number }[];
+  orders: number;
+  revenue: number;
+}
+
 export interface MonthlyReportDto {
   site: { name: string; url: string };
   month: string;
@@ -392,7 +406,22 @@ export interface MonthlyReportDto {
     position: number | null;
   } | null;
   topArticles: { title: string; url: string | null; clicks: number; impressions: number }[];
-  revenue: { total: number; orders: number; currency: string | null } | null;
+  /** Todos los artículos publicados hasta el final del mes, con lo que han hecho en el mes. */
+  articles: ReportArticleDto[];
+  /** Visitas que entraron por los artículos (las cuenta el conector 1.2.0+). */
+  traffic: {
+    /** false si el conector aún no cuenta visitas (hay que actualizarlo). */
+    measured: boolean;
+    total: number;
+    byChannel: { channel: TrafficChannel; visits: number }[];
+    assistants: { name: string; visits: number }[];
+  };
+  revenue: {
+    total: number;
+    orders: number;
+    currency: string | null;
+    byChannel: { channel: TrafficChannel | null; orders: number; total: number }[];
+  } | null;
   opportunities: { term: string; impressions: number; position: number | null }[];
   refreshed: number;
 }

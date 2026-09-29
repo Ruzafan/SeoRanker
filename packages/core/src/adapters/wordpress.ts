@@ -14,6 +14,7 @@ import type {
   StoreProduct,
   ConnectionResult,
   PostInfo,
+  PostVisits,
   ContentItem,
   ContentSample,
   CreatePostInput,
@@ -415,6 +416,20 @@ export class WordPressAdapter implements PublishingAdapter {
       return await this.requestUrl<{ orders: AttributedOrder[]; hasMore: boolean }>(
         `${this.base}/wp-json/seo-autopilot/v1/orders?after=${encodeURIComponent(after.toISOString())}&page=${page}`,
       );
+    } catch (err) {
+      if (err instanceof AppError && err.code === 'WP_REST_NOT_FOUND') return null;
+      throw err;
+    }
+  }
+
+  async listVisits(after: string): Promise<PostVisits[] | null> {
+    const env = await this.environment();
+    if (env.connectorVersion === null || isOlderVersion(env.connectorVersion, '1.2.0')) return null;
+    try {
+      const res = await this.requestUrl<{ visits: PostVisits[] }>(
+        `${this.base}/wp-json/seo-autopilot/v1/visits?after=${encodeURIComponent(after)}`,
+      );
+      return res.visits;
     } catch (err) {
       if (err instanceof AppError && err.code === 'WP_REST_NOT_FOUND') return null;
       throw err;

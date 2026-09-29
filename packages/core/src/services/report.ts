@@ -1,4 +1,12 @@
-import { planFor, type MonthlyReportDto } from '@seo/shared';
+import {
+  CONNECTOR_VERSION_VISITS,
+  aiAssistant,
+  isOlderVersion,
+  parseSettings,
+  planFor,
+  type MonthlyReportDto,
+  type TrafficChannel,
+} from '@seo/shared';
 import { requireSite, siteScope } from '../tenant.js';
 import type { CoreDeps } from './deps.js';
 import { getBranding } from './organization.js';
@@ -40,6 +48,10 @@ export async function getMonthlyReport(
     opportunities,
     refreshed,
     branding,
+    live,
+    articleMetrics,
+    visits,
+    conversions,
   ] = await Promise.all([
     scope.articles.findMany({
       where: { publishedAt: { gte: from, lte: to } },
@@ -78,7 +90,62 @@ export async function getMonthlyReport(
     }),
     scope.articles.count({ refreshedAt: { gte: from, lte: to } }),
     getBranding(deps, organizationId),
+    scope.articles.findMany({
+      where: { remoteUrl: { not: null }, publishedAt: { lte: to }, remoteStatus: 'publish' },
+      orderBy: { publishedAt: 'desc' },
+      select: { id: true, title: true, remoteUrl: true, publishedAt: true, updatedAt: true },
+    }),
+    deps.prisma.articleMetric.groupBy({
+      by: ['articleId'],
+      where: inMonth,
+      _sum: { clicks: true, impressions: true },
+    }),
+    deps.prisma.articleVisit.groupBy({
+      by: ['articleId', 'channel', 'source'],
+      where: inMonth,
+      _sum: { visits: true },
+    }),
+    deps.prisma.articleConversion.findMany({
+      where: { siteId: site.id, orderedAt: { gte: from, lte: to } },
+      select: { articleId: true, total: true, currency: true, channel: true },
+    }),
   ]);
+  // Posición media ponderada por impresiones de cada artículo en el mes.
+  const articlePositions = new Map(
+    (
+      await deps.prisma.$queryRaw<{ articleId: string; position: number | null }[]>`
+        SELECT "articleId", SUM("position" * "impressions") / NULLIF(SUM("impressions"), 0) AS position
+        FROM "ArticleMetric" WHERE "siteId" = ${site.id} AND "date" >= ${from} AND "date" <= ${to}
+        GROUP BY "articleId"`
+    ).map((r) => [r.articleId, r.position === null ? null : Number(r.position)]),
+  );
+  const metricsBy = new Map(articleMetrics.map((m) => [m.articleId, m._sum]));
+  const channelTotals = new Map<TrafficChannel, number>();
+  const assistantTotals = new Map<string, number>();
+  const visitsBy = new Map<string, Map<TrafficChannel, number>>();
+  for (const v of visits) {
+    const n = v._sum.visits ?? 0;
+    const channel = v.channel as TrafficChannel;
+    channelTotals.set(channel, (channelTotals.get(channel) ?? 0) + n);
+    const assistant = channel === 'ai' ? aiAssistant(v.source) : null;
+    if (assistant) assistantTotals.set(assistant, (assistantTotals.get(assistant) ?? 0) + n);
+    const per = visitsBy.get(v.articleId) ?? new Map<TrafficChannel, number>();
+    per.set(channel, (per.get(channel) ?? 0) + n);
+    visitsBy.set(v.articleId, per);
+  }
+  const sorted = <K>(m: Map<K, number>) => [...m.entries()].sort((a, b) => b[1] - a[1]);
+  const revenueEnabled = planFor(org.plan).revenueAttribution;
+  const ordersBy = new Map<string, { orders: number; revenue: number }>();
+  const revenueChannels = new Map<TrafficChannel | null, { orders: number; total: number }>();
+  for (const c of revenueEnabled ? conversions : []) {
+    const a = ordersBy.get(c.articleId) ?? { orders: 0, revenue: 0 };
+    ordersBy.set(c.articleId, { orders: a.orders + 1, revenue: a.revenue + c.total });
+    const key = (c.channel as TrafficChannel | null) ?? null;
+    const r = revenueChannels.get(key) ?? { orders: 0, total: 0 };
+    revenueChannels.set(key, { orders: r.orders + 1, total: r.total + c.total });
+  }
+  const round = (n: number) => Math.round(n * 100) / 100;
+  const connectorVersion = parseSettings(site.settings).connectorVersion;
 
   const titles = new Map(
     (
@@ -117,11 +184,43 @@ export async function getMonthlyReport(
       clicks: t._sum.clicks ?? 0,
       impressions: t._sum.impressions ?? 0,
     })),
+    articles: live.map((a) => {
+      const m = metricsBy.get(a.id);
+      const per = visitsBy.get(a.id) ?? new Map<TrafficChannel, number>();
+      const o = ordersBy.get(a.id);
+      return {
+        id: a.id,
+        title: a.title,
+        url: a.remoteUrl,
+        publishedAt: (a.publishedAt ?? a.updatedAt).toISOString(),
+        google: hasSearch
+          ? {
+              clicks: m?.clicks ?? 0,
+              impressions: m?.impressions ?? 0,
+              position: articlePositions.get(a.id) ?? null,
+            }
+          : null,
+        visits: [...per.values()].reduce((s, n) => s + n, 0),
+        visitsByChannel: sorted(per).map(([channel, visits]) => ({ channel, visits })),
+        orders: o?.orders ?? 0,
+        revenue: round(o?.revenue ?? 0),
+      };
+    }),
+    traffic: {
+      measured:
+        connectorVersion !== null && !isOlderVersion(connectorVersion, CONNECTOR_VERSION_VISITS),
+      total: [...channelTotals.values()].reduce((s, n) => s + n, 0),
+      byChannel: sorted(channelTotals).map(([channel, visits]) => ({ channel, visits })),
+      assistants: sorted(assistantTotals).map(([name, visits]) => ({ name, visits })),
+    },
     revenue: revenue
       ? {
-          total: Math.round((rev?._sum.total ?? 0) * 100) / 100,
+          total: round(rev?._sum.total ?? 0),
           orders: rev?._count._all ?? 0,
           currency: rev?.currency ?? null,
+          byChannel: [...revenueChannels.entries()]
+            .sort((a, b) => b[1].total - a[1].total)
+            .map(([channel, r]) => ({ channel, orders: r.orders, total: round(r.total) })),
         }
       : null,
     opportunities: opportunities.map((k) => ({
