@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { PRODUCT_ISSUES } from './products.js';
 import { INVITABLE_ROLES, PAID_PLAN_IDS, PLATFORM_IDS } from './plans.js';
 import { editableSettingsSchema } from './settings.js';
 
@@ -98,6 +99,35 @@ export const keywordQuerySchema = z.object({
 });
 export type KeywordQuery = z.infer<typeof keywordQuerySchema>;
 
+// ---- Productos -------------------------------------------------------------
+export const productQuerySchema = z.object({
+  issue: z.enum(PRODUCT_ISSUES).optional(),
+  search: z.string().trim().max(200).optional(),
+  /** Con sugerencias pendientes de revisar. */
+  pending: z
+    .enum(['true', 'false'])
+    .transform((v) => v === 'true')
+    .optional(),
+  sort: z.enum(['score', 'name']).default('score'),
+  order: z.enum(['asc', 'desc']).default('asc'),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(25),
+});
+export type ProductQuery = z.infer<typeof productQuerySchema>;
+
+export const analyzeProductsSchema = z.object({
+  /** Productos concretos; sin ellos, los de peor puntuación sin sugerencias pendientes. */
+  productIds: z.array(z.string().min(1).max(64)).min(1).max(50).optional(),
+  limit: z.number().int().min(1).max(50).default(10),
+});
+export type AnalyzeProductsInput = z.infer<typeof analyzeProductsSchema>;
+
+export const decideSuggestionsSchema = z.object({
+  ids: z.array(z.string().min(1).max(64)).min(1).max(50),
+  decision: z.enum(['accept', 'reject']),
+});
+export type DecideSuggestionsInput = z.infer<typeof decideSuggestionsSchema>;
+
 // ---- Articles ------------------------------------------------------------
 export const ARTICLE_STATUSES = [
   'draft',
@@ -141,6 +171,8 @@ export type PublishArticleInput = z.infer<typeof publishArticleSchema>;
 export const JOB_TYPES = [
   'discover',
   'seeds',
+  'product-scan',
+  'product-seo',
   'outline',
   'write',
   'publish',

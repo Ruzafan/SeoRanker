@@ -8,6 +8,7 @@ export function currentPeriod(now: Date = new Date()): string {
 
 export interface UsageDelta {
   articles?: number;
+  products?: number;
   inputTokens?: number;
   outputTokens?: number;
   costCents?: number;
@@ -22,6 +23,7 @@ export async function recordUsage(
   const period = currentPeriod(now);
   const inc = {
     articles: delta.articles ?? 0,
+    products: delta.products ?? 0,
     inputTokens: delta.inputTokens ?? 0,
     outputTokens: delta.outputTokens ?? 0,
     costCents: delta.costCents ?? 0,
@@ -31,6 +33,7 @@ export async function recordUsage(
     create: { siteId, period, ...inc },
     update: {
       articles: { increment: inc.articles },
+      products: { increment: inc.products },
       inputTokens: { increment: inc.inputTokens },
       outputTokens: { increment: inc.outputTokens },
       costCents: { increment: inc.costCents },

@@ -1,3 +1,4 @@
+import type { ProductSnapshot } from '@seo/shared';
 import { NotImplementedError } from '../errors.js';
 import type {
   AttributedOrder,
@@ -6,6 +7,7 @@ import type {
   ConnectionResult,
   PostInfo,
   PostVisits,
+  ProductChange,
   ContentItem,
   ContentSample,
   CreatePostInput,
@@ -49,5 +51,14 @@ export class ShopifyAdapter implements PublishingAdapter {
   }
   listVisits(_after: string): Promise<PostVisits[] | null> {
     throw new NotImplementedError('ShopifyAdapter.listVisits');
+  }
+  listProducts(
+    _page: number,
+    _ids?: number[],
+  ): Promise<{ products: ProductSnapshot[]; hasMore: boolean } | null> {
+    throw new NotImplementedError('ShopifyAdapter.listProducts');
+  }
+  updateProduct(_id: number, _changes: ProductChange[]): Promise<ProductSnapshot> {
+    throw new NotImplementedError('ShopifyAdapter.updateProduct');
   }
 }

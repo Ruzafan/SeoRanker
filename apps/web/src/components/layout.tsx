@@ -14,6 +14,7 @@ import {
   Mic2,
   Settings,
   Shield,
+  ShoppingBag,
   type LucideIcon,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -34,6 +35,7 @@ const siteNav: NavItem[] = [
   { to: 'performance', label: 'Rendimiento', icon: LineChart },
   { to: 'keywords', label: 'Keywords', icon: KeyRound },
   { to: 'articles', label: 'Artículos', icon: FileText },
+  { to: 'products', label: 'Productos', icon: ShoppingBag },
   { to: 'calendar', label: 'Calendario', icon: CalendarDays },
   { to: 'report', label: 'Informe', icon: ClipboardList },
   { to: 'voice', label: 'Voz de marca', icon: Mic2 },

@@ -6,3 +6,5 @@ export * from './dto.js';
 export * from './plans.js';
 export * from './onpage.js';
 export * from './traffic.js';
+export * from './products.js';
+export * from './diff.js';

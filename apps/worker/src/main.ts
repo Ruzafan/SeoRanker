@@ -25,6 +25,8 @@ const PIPELINE_TYPES: PipelineJobType[] = [
   'brand-voice',
   'discover',
   'seeds',
+  'product-scan',
+  'product-seo',
   'outline',
   'write',
   'publish',

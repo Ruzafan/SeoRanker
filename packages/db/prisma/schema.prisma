@@ -32,13 +32,13 @@ model Organization {
 }
 
 model User {
-  id             String       @id @default(cuid())
-  email          String       @unique
+  id             String           @id @default(cuid())
+  email          String           @unique
   passwordHash   String
-  role           String       @default("owner") // owner | member | viewer (cliente: lee, comenta y aprueba)
+  role           String           @default("owner") // owner | member | viewer (cliente: lee, comenta y aprueba)
   organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  createdAt      DateTime     @default(now())
+  organization   Organization     @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime         @default(now())
   comments       ArticleComment[]
 
   @@index([organizationId])
@@ -74,17 +74,19 @@ model Site {
   active         Boolean      @default(true)
   createdAt      DateTime     @default(now())
 
-  keywords      Keyword[]
-  articles      Article[]
-  jobs          JobRun[]
-  usage         UsageRecord[]
-  searchConsole SearchConsoleConnection?
-  clusters      KeywordCluster[]
-  internalLinks InternalLink[]
-  aiChecks      AiVisibilityCheck[]
-  metrics       ArticleMetric[]
-  conversions   ArticleConversion[]
-  visits        ArticleVisit[]
+  keywords           Keyword[]
+  articles           Article[]
+  jobs               JobRun[]
+  usage              UsageRecord[]
+  searchConsole      SearchConsoleConnection?
+  clusters           KeywordCluster[]
+  internalLinks      InternalLink[]
+  aiChecks           AiVisibilityCheck[]
+  metrics            ArticleMetric[]
+  conversions        ArticleConversion[]
+  visits             ArticleVisit[]
+  products           Product[]
+  productSuggestions ProductSuggestion[]
 
   @@index([organizationId])
 }
@@ -110,13 +112,13 @@ model Keyword {
   gscClicks      Int?
   gscPosition    Float?
 
-  clusterId String?
-  cluster   KeywordCluster? @relation(fields: [clusterId], references: [id], onDelete: SetNull)
+  clusterId          String?
+  cluster            KeywordCluster? @relation(fields: [clusterId], references: [id], onDelete: SetNull)
   /// Motivo del descarte automático (CANNIBALIZATION) y artículo con el que choca.
   discardReason      String?
   similarToArticleId String?
   /// El usuario la recuperó tras un descarte automático: no se vuelve a descartar por similitud.
-  allowSimilar       Boolean @default(false)
+  allowSimilar       Boolean         @default(false)
 
   articles Article[]
 
@@ -126,25 +128,25 @@ model Keyword {
 }
 
 model Article {
-  id              String    @id @default(cuid())
-  siteId          String
-  site            Site      @relation(fields: [siteId], references: [id], onDelete: Cascade)
-  keywordId       String?
-  keyword         Keyword?  @relation(fields: [keywordId], references: [id], onDelete: SetNull)
-  title           String
-  slug            String
-  metaDescription String?
-  outline         Json?
+  id                  String    @id @default(cuid())
+  siteId              String
+  site                Site      @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  keywordId           String?
+  keyword             Keyword?  @relation(fields: [keywordId], references: [id], onDelete: SetNull)
+  title               String
+  slug                String
+  metaDescription     String?
+  outline             Json?
   /// Top de Google para la keyword al planificar (títulos, H2 de la competencia, preguntas).
-  serp            Json?
-  contentHtml     String?   @db.Text
+  serp                Json?
+  contentHtml         String?   @db.Text
   /// Imagen destacada (ID de medio de WordPress, p. ej. la foto del producto recomendado).
-  featuredMediaId Int?
-  status          String    @default("draft") // draft | writing | ready | publishing | published | failed
-  remotePostId    Int? // ID del post en WordPress
-  remoteUrl       String?
-  remoteStatus    String? // estado del post en WordPress (draft | publish | future…), lo sincroniza `sync`
-  decayDetectedAt DateTime? // pierde clics en Search Console: candidato a refrescar
+  featuredMediaId     Int?
+  status              String    @default("draft") // draft | writing | ready | publishing | published | failed
+  remotePostId        Int? // ID del post en WordPress
+  remoteUrl           String?
+  remoteStatus        String? // estado del post en WordPress (draft | publish | future…), lo sincroniza `sync`
+  decayDetectedAt     DateTime? // pierde clics en Search Console: candidato a refrescar
   /// Refresco: fecha y versión anterior del contenido (para poder deshacerlo).
   refreshedAt         DateTime?
   previousContentHtml String?   @db.Text
@@ -152,21 +154,20 @@ model Article {
   scheduledFor        DateTime?
   /// Aprobación del cliente: none | pending | approved | changes_requested
   reviewStatus        String    @default("none")
-  wordCount       Int       @default(0)
-  publishedAt     DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-
-  @@index([siteId, status])
-  @@index([status, updatedAt]) // watchdog de zombis
+  wordCount           Int       @default(0)
+  publishedAt         DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   metrics     ArticleMetric[]
   conversions ArticleConversion[]
   visits      ArticleVisit[]
-  linksOut    InternalLink[] @relation("linkFrom")
-  linksIn     InternalLink[] @relation("linkTo")
+  linksOut    InternalLink[]      @relation("linkFrom")
+  linksIn     InternalLink[]      @relation("linkTo")
   comments    ArticleComment[]
 
+  @@index([siteId, status])
+  @@index([status, updatedAt]) // watchdog de zombis
   @@index([status, scheduledFor]) // publicación programada
 }
 
@@ -281,6 +282,49 @@ model ArticleVisit {
   @@index([siteId, date])
 }
 
+/// Producto de la tienda (WooCommerce) con su diagnóstico SEO. Se refresca con `product-scan`.
+model Product {
+  id          String              @id @default(cuid())
+  siteId      String
+  site        Site                @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  remoteId    Int
+  name        String
+  url         String
+  /// ProductSnapshot (@seo/shared): lo que el conector devolvió en el último análisis.
+  data        Json
+  score       Int
+  issues      String[]
+  scannedAt   DateTime
+  /// Última vez que Claude generó sugerencias.
+  analyzedAt  DateTime?
+  suggestions ProductSuggestion[]
+
+  @@unique([siteId, remoteId])
+  @@index([siteId, score])
+}
+
+/// Cambio propuesto para un campo de un producto. Nunca se aplica sin que el usuario lo acepte.
+model ProductSuggestion {
+  id        String    @id @default(cuid())
+  siteId    String
+  site      Site      @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  /// ProductField: focus_keyword | seo_title | meta_description | short_description | tags | image_alt:<id>
+  field     String
+  kind      String // fill | improve
+  /// Valor en WordPress al sugerir (null = vacío). Al aplicar se exige que siga igual.
+  before    String?
+  after     String
+  reason    String?
+  status    String    @default("pending") // pending | applied | rejected | reverted
+  createdAt DateTime  @default(now())
+  decidedAt DateTime?
+
+  @@index([productId, status])
+  @@index([siteId, status])
+}
+
 model JobRun {
   id         String    @id @default(cuid())
   siteId     String
@@ -307,6 +351,8 @@ model UsageRecord {
   inputTokens  Int    @default(0)
   outputTokens Int    @default(0)
   costCents    Int    @default(0)
+  /// Productos revisados por Claude (SEO de ficha de producto); tope en PLANS.productsPerMonth.
+  products     Int    @default(0)
 
   @@unique([siteId, period])
 }

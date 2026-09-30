@@ -43,7 +43,9 @@ export function runDiscover(ctx: PipelineContext, info: RunInfo): Promise<void> 
     // Sin seeds: se deducen del contenido de la tienda y se guardan (el usuario puede editarlas).
     const seedsGenerated = settings.seeds.length === 0;
     if (seedsGenerated) {
-      settings = { ...settings, seeds: await generateSeeds(ctx, site, tracker) };
+      const seeds = await generateSeeds(ctx, site, tracker);
+      // Se releen: mientras Claude pensaba, una prueba de conexión pudo guardar otros ajustes.
+      settings = { ...parseSettings((await loadSite(ctx, site.id)).settings), seeds };
       await ctx.prisma.site.update({ where: { id: site.id }, data: { settings } });
     }
 

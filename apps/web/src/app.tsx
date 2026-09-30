@@ -5,6 +5,8 @@ import { useMe } from './lib/hooks';
 import { AdminPage } from './pages/admin';
 import { ArticleEditorPage } from './pages/article-editor';
 import { ArticlesPage } from './pages/articles';
+import { ProductsPage } from './pages/products';
+import { ProductDetailPage } from './pages/product-detail';
 import { BillingPage } from './pages/billing';
 import { CalendarPage } from './pages/calendar';
 import { InvitePage } from './pages/invite';
@@ -73,6 +75,8 @@ export function App() {
         <Route path="keywords" element={<KeywordsPage />} />
         <Route path="articles" element={<ArticlesPage />} />
         <Route path="articles/:articleId" element={<ArticleEditorPage />} />
+        <Route path="products" element={<ProductsPage />} />
+        <Route path="products/:productId" element={<ProductDetailPage />} />
         <Route path="calendar" element={<CalendarPage />} />
         <Route path="report" element={<ReportPage />} />
         <Route path="voice" element={<BrandVoicePage />} />

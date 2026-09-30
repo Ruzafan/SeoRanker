@@ -27,3 +27,4 @@ export * from './services/demo.js';
 export * from './services/organization.js';
 export * from './services/report.js';
 export * from './services/ai-visibility.js';
+export * from './services/products.js';

@@ -613,6 +613,28 @@ describe.skipIf(!db)('API (integración con Postgres)', () => {
           outline: {},
         },
       });
+      const product = await prisma.product.create({
+        data: {
+          siteId: site.id,
+          remoteId: 7,
+          name: 'Secreto producto',
+          url: 'https://t.es/p',
+          data: {},
+          score: 50,
+          issues: [],
+          scannedAt: new Date(),
+        },
+      });
+      const suggestion = await prisma.productSuggestion.create({
+        data: {
+          siteId: site.id,
+          productId: product.id,
+          field: 'meta_description',
+          kind: 'fill',
+          after: 'Secreto',
+          status: 'applied',
+        },
+      });
 
       const attempts: [string, string, unknown?][] = [
         ['get', `/api/v1/sites/${site.id}`],
@@ -659,6 +681,18 @@ describe.skipIf(!db)('API (integración con Postgres)', () => {
         ['get', `/api/v1/sites/${site.id}/performance`],
         ['get', `/api/v1/sites/${site.id}/ai-visibility`],
         ['post', `/api/v1/sites/${site.id}/ai-visibility/run`],
+        ['get', `/api/v1/sites/${site.id}/products`],
+        ['get', `/api/v1/sites/${site.id}/products/overview`],
+        ['post', `/api/v1/sites/${site.id}/products/scan`],
+        ['post', `/api/v1/sites/${site.id}/products/analyze`, {}],
+        ['get', `/api/v1/products/${product.id}`],
+        ['post', `/api/v1/products/${product.id}/analyze`],
+        [
+          'post',
+          `/api/v1/products/${product.id}/suggestions`,
+          { ids: [suggestion.id], decision: 'reject' },
+        ],
+        ['post', `/api/v1/product-suggestions/${suggestion.id}/revert`],
       ];
       for (const [method, path, body] of attempts) {
         const res = await (b as unknown as Record<string, (p: string) => request.Test>)[method]!(

@@ -2,6 +2,11 @@ import { useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import type {
+  AnalyzeProductsInput,
+  DecideSuggestionsInput,
+  ProductDto,
+  ProductSummaryDto,
+  ProductsOverviewDto,
   ArticleDto,
   ArticleSummaryDto,
   BatchResultDto,
@@ -487,3 +492,55 @@ export function withToast<T>(p: Promise<T>, okMessage?: string): Promise<T | und
     },
   );
 }
+
+// ---- Productos (SEO de fichas) ---------------------------------------------------
+export interface ProductFilters {
+  issue?: string;
+  search?: string;
+  pending?: 'true';
+  page: number;
+}
+
+export const useProductsOverview = (siteId: string) =>
+  useQuery({
+    queryKey: ['site', siteId, 'products', 'overview'],
+    queryFn: () => api.get<ProductsOverviewDto>(`/sites/${siteId}/products/overview`),
+    refetchInterval: pollWhile<ProductsOverviewDto>((d) => d.scanning),
+  });
+
+export const useProducts = (siteId: string, f: ProductFilters) =>
+  useQuery({
+    queryKey: ['site', siteId, 'products', 'list', f],
+    queryFn: () =>
+      api.get<Paginated<ProductSummaryDto>>(
+        `/sites/${siteId}/products${qs({ ...f, pageSize: 25 })}`,
+      ),
+    placeholderData: (prev) => prev,
+    refetchInterval: pollWhile<Paginated<ProductSummaryDto>>((d) =>
+      d.items.some((p) => p.analyzing),
+    ),
+  });
+
+export const useProduct = (siteId: string, id: string) =>
+  useQuery({
+    queryKey: ['site', siteId, 'products', 'detail', id],
+    queryFn: () => api.get<ProductDto>(`/products/${id}`),
+    refetchInterval: pollWhile<ProductDto>((p) => p.analyzing),
+  });
+
+export const useScanProducts = (siteId: string) =>
+  useSiteMutation(siteId, () => api.post<EnqueuedDto>(`/sites/${siteId}/products/scan`));
+export const useAnalyzeProducts = (siteId: string) =>
+  useSiteMutation(siteId, (input: Partial<AnalyzeProductsInput>) =>
+    api.post<{ enqueued: number }>(`/sites/${siteId}/products/analyze`, input),
+  );
+export const useAnalyzeProduct = (siteId: string) =>
+  useSiteMutation(siteId, (id: string) => api.post<EnqueuedDto>(`/products/${id}/analyze`));
+export const useDecideSuggestions = (siteId: string, productId: string) =>
+  useSiteMutation(siteId, (input: DecideSuggestionsInput) =>
+    api.post<ProductDto>(`/products/${productId}/suggestions`, input),
+  );
+export const useRevertSuggestion = (siteId: string) =>
+  useSiteMutation(siteId, (suggestionId: string) =>
+    api.post<ProductDto>(`/product-suggestions/${suggestionId}/revert`),
+  );

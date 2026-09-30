@@ -4,6 +4,7 @@ import type {
   JobType,
   KEYWORD_SOURCES,
   KeywordIntentFilter,
+  ProductIssue,
   TrafficChannel,
   KeywordStatus,
   WarningCode,
@@ -51,6 +52,11 @@ export const errorMessages: Record<ErrorCode | 'NETWORK_ERROR', string> = {
     'La respuesta de Claude se cortó por longitud. Reduce las palabras por artículo y regenera.',
   AI_INVALID_OUTPUT: 'Claude devolvió un resultado que no se pudo validar.',
   NOT_IMPLEMENTED: 'Esta función aún no está disponible.',
+  PRODUCT_QUOTA_EXCEEDED:
+    'Has llegado al límite de productos revisados este mes. Mejora tu plan para revisar más.',
+  PRODUCT_CHANGED:
+    'El producto ha cambiado en WordPress desde la sugerencia. Vuelve a analizarlo para no pisar tus cambios.',
+  CONNECTOR_UPDATE_REQUIRED: 'Actualiza el conector de WordPress (Ajustes) para usar esta función.',
   WATCHDOG_TIMEOUT: 'El trabajo no terminó a tiempo y se marcó como fallido.',
   INTERNAL_ERROR: 'Error interno del servidor.',
   NETWORK_ERROR: 'No se pudo contactar con el servidor.',
@@ -118,6 +124,8 @@ export const jobTypeLabel: Record<JobType, string> = {
   refresh: 'Refresco de contenido',
   'ai-visibility': 'Visibilidad en IA',
   seeds: 'Semillas',
+  'product-scan': 'Análisis de productos',
+  'product-seo': 'SEO de producto',
   watchdog: 'Vigilante',
   schedule: 'Programación',
 };
@@ -150,6 +158,31 @@ export const trafficChannelLabel: Record<TrafficChannel, string> = {
   referral: 'Otras webs',
   direct: 'Directo',
 };
+
+export const productIssueLabel: Record<ProductIssue, string> = {
+  NO_SEO_PLUGIN: 'Sin Yoast ni Rank Math',
+  NO_FOCUS_KEYWORD: 'Sin keyword principal',
+  NO_META_DESCRIPTION: 'Sin meta descripción',
+  META_DESCRIPTION_LENGTH: 'Meta descripción muy corta o larga',
+  NO_SEO_TITLE: 'Sin título SEO propio',
+  SEO_TITLE_TOO_LONG: 'Título SEO demasiado largo',
+  NO_SHORT_DESCRIPTION: 'Sin descripción corta',
+  IMAGES_WITHOUT_ALT: 'Imágenes sin texto alternativo',
+  FEW_TAGS: 'Pocas etiquetas',
+  THIN_DESCRIPTION: 'Descripción muy breve',
+};
+
+/** Nombre legible de un campo de producto (las imágenes van como `image_alt:<id>`). */
+export function productFieldLabel(field: string): string {
+  const labels: Record<string, string> = {
+    focus_keyword: 'Keyword principal',
+    seo_title: 'Título SEO',
+    meta_description: 'Meta descripción',
+    short_description: 'Descripción corta',
+    tags: 'Etiquetas',
+  };
+  return labels[field] ?? (field.startsWith('image_alt:') ? 'Texto alternativo de imagen' : field);
+}
 
 export const cadenceLabel: Record<string, string> = {
   off: 'Desactivada',

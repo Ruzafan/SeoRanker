@@ -9,6 +9,7 @@ import { runCluster } from './cluster.js';
 import { runBacklink } from './backlink.js';
 import { runRefresh } from './refresh.js';
 import { runSeeds } from './seeds.js';
+import { runProductScan, runProductSeo } from './products.js';
 import { runAiVisibility } from './ai-visibility.js';
 import { runWrite } from './write.js';
 
@@ -25,6 +26,8 @@ const RUNNERS: Record<PipelineJobType, (ctx: PipelineContext, info: RunInfo) => 
   'brand-voice': runBrandVoice,
   discover: runDiscover,
   seeds: runSeeds,
+  'product-scan': runProductScan,
+  'product-seo': runProductSeo,
   outline: runOutline,
   write: runWrite,
   publish: runPublish,

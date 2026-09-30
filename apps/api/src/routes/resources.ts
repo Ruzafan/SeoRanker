@@ -3,6 +3,14 @@ import { z } from 'zod';
 import {
   analyzeVoice,
   suggestSeeds,
+  analyzeProduct,
+  analyzeProducts,
+  decideSuggestions,
+  getProduct,
+  getProductsOverview,
+  listProducts,
+  revertSuggestion,
+  scanProducts,
   batchKeywords,
   createKeywords,
   createSite,
@@ -54,6 +62,9 @@ import {
 } from '@seo/core';
 import {
   articleQuerySchema,
+  analyzeProductsSchema,
+  decideSuggestionsSchema,
+  productQuerySchema,
   calendarQuerySchema,
   commentSchema,
   reportQuerySchema,
@@ -300,6 +311,48 @@ export function resourceRoutes(deps: CoreDeps, auth: AuthHelpers) {
     app.post('/sites/:id/ai-visibility/run', async (req, reply) => {
       const { id } = idParam.parse(req.params);
       return reply.status(202).send(await runAiVisibilityNow(deps, org(req), id));
+    });
+
+    // ---- Productos (SEO de fichas) ---------------------------------------
+    app.get('/sites/:id/products', async (req) => {
+      const { id } = idParam.parse(req.params);
+      return listProducts(deps, org(req), id, productQuerySchema.parse(req.query));
+    });
+
+    app.get('/sites/:id/products/overview', async (req) => {
+      const { id } = idParam.parse(req.params);
+      return getProductsOverview(deps, org(req), id);
+    });
+
+    app.post('/sites/:id/products/scan', async (req, reply) => {
+      const { id } = idParam.parse(req.params);
+      return reply.status(202).send(await scanProducts(deps, org(req), id));
+    });
+
+    app.post('/sites/:id/products/analyze', async (req, reply) => {
+      const { id } = idParam.parse(req.params);
+      const input = analyzeProductsSchema.parse(req.body ?? {});
+      return reply.status(202).send(await analyzeProducts(deps, org(req), id, input));
+    });
+
+    app.get('/products/:id', async (req) => {
+      const { id } = idParam.parse(req.params);
+      return getProduct(deps, org(req), id);
+    });
+
+    app.post('/products/:id/analyze', async (req, reply) => {
+      const { id } = idParam.parse(req.params);
+      return reply.status(202).send(await analyzeProduct(deps, org(req), id));
+    });
+
+    app.post('/products/:id/suggestions', async (req) => {
+      const { id } = idParam.parse(req.params);
+      return decideSuggestions(deps, org(req), id, decideSuggestionsSchema.parse(req.body));
+    });
+
+    app.post('/product-suggestions/:id/revert', async (req) => {
+      const { id } = idParam.parse(req.params);
+      return revertSuggestion(deps, org(req), id);
     });
 
     app.get('/sites/:id/performance', async (req) => {

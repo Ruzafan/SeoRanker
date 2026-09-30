@@ -28,6 +28,10 @@ export interface PlanDef {
   contentRefresh: boolean;
   /** Aprobación del cliente antes de publicar. */
   approvals: boolean;
+  /** Productos que Claude puede revisar al mes (SEO de la ficha de producto). */
+  productsPerMonth: number;
+  /** Revisar productos por lotes (varios con un clic). */
+  productBatch: boolean;
   features: string[];
 }
 
@@ -44,12 +48,15 @@ export const PLANS: Record<PlanId, PlanDef> = {
     revenueAttribution: false,
     contentRefresh: false,
     approvals: false,
+    productsPerMonth: 1,
+    productBatch: false,
     features: [
       '1 tienda',
       '3 artículos para probar',
       'Search Console: clics y posiciones',
       'Keywords automáticas',
       'Borradores en tu CMS',
+      'SEO de 1 producto al mes',
     ],
   },
   starter: {
@@ -64,11 +71,14 @@ export const PLANS: Record<PlanId, PlanDef> = {
     revenueAttribution: false,
     contentRefresh: false,
     approvals: false,
+    productsPerMonth: 15,
+    productBatch: false,
     features: [
       '1 tienda',
       '20 artículos al mes',
       'Oportunidades desde Search Console',
       'Publicación automática',
+      'SEO de 15 productos al mes',
     ],
   },
   pro: {
@@ -83,12 +93,15 @@ export const PLANS: Record<PlanId, PlanDef> = {
     revenueAttribution: true,
     contentRefresh: true,
     approvals: false,
+    productsPerMonth: 100,
+    productBatch: true,
     features: [
       'Hasta 5 tiendas',
       '100 artículos al mes',
       'Ventas atribuidas en WooCommerce',
       'Refresco de contenido y clusters',
       'Visibilidad en IA',
+      'SEO de 100 productos al mes, por lotes',
     ],
   },
   agency: {
@@ -103,12 +116,15 @@ export const PLANS: Record<PlanId, PlanDef> = {
     revenueAttribution: true,
     contentRefresh: true,
     approvals: true,
+    productsPerMonth: 500,
+    productBatch: true,
     features: [
       'Hasta 25 tiendas',
       '400 artículos al mes',
       'Informes marca blanca',
       'Aprobación de clientes',
       'Usuarios ilimitados',
+      'SEO de 500 productos al mes, por lotes',
     ],
   },
 };

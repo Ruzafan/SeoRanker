@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       SEO Autopilot Connector
  * Description:       Conecta tu tienda con SEO Autopilot: expone los campos de Yoast SEO y Rank Math a la API REST y publica los datos estructurados (JSON-LD) de los artículos generados.
- * Version:           1.2.0
+ * Version:           1.3.0
  * Requires at least: 5.6
  * Requires PHP:      7.4
  * Author:            SEO Autopilot
@@ -14,7 +14,7 @@ if (!defined('ABSPATH')) {
 	exit;
 }
 
-define('SEO_AUTOPILOT_CONNECTOR_VERSION', '1.2.0');
+define('SEO_AUTOPILOT_CONNECTOR_VERSION', '1.3.0');
 
 /**
  * Campos SEO que SEO Autopilot escribe por la API REST. Yoast y Rank Math no los registran con
@@ -274,6 +274,237 @@ add_action('rest_api_init', function () {
 				}
 			}
 			return array('visits' => $rows);
+		},
+	));
+});
+
+/*
+ * SEO de las fichas de producto (WooCommerce). SEO Autopilot lee cada producto, propone cambios y
+ * solo escribe los que el usuario acepta. Al escribir exige que el valor actual siga siendo el que
+ * vio al proponerlo: si alguien lo ha editado mientras tanto, no se pisa (409).
+ */
+function seo_autopilot_seo_plugin() {
+	if (defined('WPSEO_VERSION')) {
+		return 'yoast';
+	}
+	if (class_exists('RankMath')) {
+		return 'rankmath';
+	}
+	return null;
+}
+
+function seo_autopilot_seo_meta_key($field, $plugin) {
+	$keys = array(
+		'yoast'    => array(
+			'focus_keyword'    => '_yoast_wpseo_focuskw',
+			'seo_title'        => '_yoast_wpseo_title',
+			'meta_description' => '_yoast_wpseo_metadesc',
+		),
+		'rankmath' => array(
+			'focus_keyword'    => 'rank_math_focus_keyword',
+			'seo_title'        => 'rank_math_title',
+			'meta_description' => 'rank_math_description',
+		),
+	);
+	return $plugin && isset($keys[$plugin][$field]) ? $keys[$plugin][$field] : null;
+}
+
+/**
+ * Yoast sirve título y meta desde su tabla de "indexables", y guardar el producto no siempre la
+ * regenera: sin esto, la meta nueva está en la base de datos pero no sale en la web. Rank Math lee
+ * la meta directamente y no lo necesita.
+ */
+function seo_autopilot_refresh_seo_cache($post_id) {
+	if (!function_exists('YoastSEO')) {
+		return;
+	}
+	try {
+		// El contenedor de Yoast no admite la barra inicial en el nombre de la clase.
+		$repository = YoastSEO()->classes->get('Yoast\WP\SEO\Repositories\Indexable_Repository');
+		$builder    = YoastSEO()->classes->get('Yoast\WP\SEO\Builders\Indexable_Builder');
+		$indexable  = $builder->build_for_id_and_type($post_id, 'post', $repository->find_by_id_and_type($post_id, 'post', false));
+		// En una petición REST el builder no lo persiste por sí solo.
+		if ($indexable) {
+			$indexable->save();
+		}
+	} catch (\Throwable $e) {
+		// Una versión de Yoast sin esta API: la meta ya está guardada; Yoast la recogerá al reindexar.
+	}
+}
+
+function seo_autopilot_product_image_ids($product) {
+	$ids = array_merge(array((int) $product->get_image_id()), array_map('intval', $product->get_gallery_image_ids()));
+	return array_values(array_unique(array_filter($ids)));
+}
+
+function seo_autopilot_term_names($product_id, $taxonomy) {
+	$names = wp_get_post_terms($product_id, $taxonomy, array('fields' => 'names'));
+	return is_wp_error($names) ? array() : array_values(array_map('strval', $names));
+}
+
+function seo_autopilot_product_snapshot($product) {
+	$id     = $product->get_id();
+	$plugin = seo_autopilot_seo_plugin();
+	$meta   = function ($field) use ($id, $plugin) {
+		$key = seo_autopilot_seo_meta_key($field, $plugin);
+		return $key ? (string) get_post_meta($id, $key, true) : '';
+	};
+	$images = array();
+	foreach (seo_autopilot_product_image_ids($product) as $image_id) {
+		$images[] = array(
+			'id'  => $image_id,
+			'url' => (string) wp_get_attachment_image_url($image_id, 'thumbnail'),
+			'alt' => (string) get_post_meta($image_id, '_wp_attachment_image_alt', true),
+		);
+	}
+	$description = trim(preg_replace('/\s+/', ' ', wp_strip_all_tags((string) $product->get_description())));
+	$price       = (string) $product->get_price();
+	return array(
+		'id'               => $id,
+		'name'             => (string) $product->get_name(),
+		'url'              => (string) get_permalink($id),
+		'status'           => (string) $product->get_status(),
+		'shortDescription' => (string) $product->get_short_description(),
+		'description'      => function_exists('mb_substr') ? mb_substr($description, 0, 2000) : substr($description, 0, 2000),
+		'categories'       => seo_autopilot_term_names($id, 'product_cat'),
+		'tags'             => seo_autopilot_term_names($id, 'product_tag'),
+		'price'            => $price === '' ? null : $price,
+		'images'           => $images,
+		'seoPlugin'        => $plugin,
+		'focusKeyword'     => $meta('focus_keyword'),
+		'seoTitle'         => $meta('seo_title'),
+		'metaDescription'  => $meta('meta_description'),
+	);
+}
+
+/** Valor actual de un campo, en el mismo formato en que llega `expected`. */
+function seo_autopilot_product_field_value($product, $field) {
+	$snapshot = seo_autopilot_product_snapshot($product);
+	switch ($field) {
+		case 'focus_keyword':
+			return $snapshot['focusKeyword'];
+		case 'seo_title':
+			return $snapshot['seoTitle'];
+		case 'meta_description':
+			return $snapshot['metaDescription'];
+		case 'short_description':
+			return $snapshot['shortDescription'];
+		case 'tags':
+			return $snapshot['tags'];
+	}
+	if (preg_match('/^image_alt:(\d+)$/', $field, $m)) {
+		foreach ($snapshot['images'] as $image) {
+			if ($image['id'] === (int) $m[1]) {
+				return $image['alt'];
+			}
+		}
+	}
+	return null;
+}
+
+function seo_autopilot_same_value($current, $expected) {
+	if (is_array($current) || is_array($expected)) {
+		$norm = function ($list) {
+			$list = array_map(function ($v) {
+				return strtolower(trim((string) $v));
+			}, is_array($list) ? $list : array());
+			$list = array_values(array_unique(array_filter($list, 'strlen')));
+			sort($list);
+			return $list;
+		};
+		return $norm($current) === $norm($expected);
+	}
+	return trim((string) $current) === trim((string) $expected);
+}
+
+add_action('rest_api_init', function () {
+	register_rest_route('seo-autopilot/v1', '/products', array(
+		'methods'             => 'GET',
+		'permission_callback' => function () {
+			return current_user_can('edit_products');
+		},
+		'args'                => array(
+			'page' => array('type' => 'integer', 'default' => 1, 'minimum' => 1),
+			'ids'  => array('type' => 'string', 'default' => ''),
+		),
+		'callback'            => function (WP_REST_Request $request) {
+			if (!function_exists('wc_get_products')) {
+				return new WP_Error('seo_autopilot_no_woocommerce', 'WooCommerce is not active', array('status' => 404));
+			}
+			$args = array(
+				'status'  => array('publish'),
+				'limit'   => 50,
+				'page'    => (int) $request->get_param('page'),
+				'orderby' => 'ID',
+				'order'   => 'ASC',
+			);
+			$ids = array_filter(array_map('intval', explode(',', (string) $request->get_param('ids'))));
+			if ($ids) {
+				$args['include'] = $ids;
+				$args['limit']   = count($ids);
+				$args['page']    = 1;
+			}
+			$products = wc_get_products($args);
+			return array(
+				'products' => array_map('seo_autopilot_product_snapshot', $products),
+				'hasMore'  => !$ids && count($products) === 50,
+			);
+		},
+	));
+
+	register_rest_route('seo-autopilot/v1', '/products/(?P<id>\d+)', array(
+		'methods'             => 'POST',
+		'permission_callback' => function (WP_REST_Request $request) {
+			return current_user_can('edit_product', (int) $request['id']);
+		},
+		'callback'            => function (WP_REST_Request $request) {
+			if (!function_exists('wc_get_product')) {
+				return new WP_Error('seo_autopilot_no_woocommerce', 'WooCommerce is not active', array('status' => 404));
+			}
+			$product = wc_get_product((int) $request['id']);
+			if (!$product) {
+				return new WP_Error('seo_autopilot_not_found', 'Product not found', array('status' => 404));
+			}
+			$body    = json_decode((string) $request->get_body(), true);
+			$changes = is_array($body) && isset($body['changes']) && is_array($body['changes']) ? $body['changes'] : array();
+			$plugin  = seo_autopilot_seo_plugin();
+
+			// 1. Todo o nada: primero se comprueba que ningún campo ha cambiado desde la sugerencia.
+			foreach ($changes as $change) {
+				$field   = isset($change['field']) ? (string) $change['field'] : '';
+				$current = seo_autopilot_product_field_value($product, $field);
+				if ($current === null) {
+					return new WP_Error('seo_autopilot_bad_field', 'Unknown field ' . $field, array('status' => 400));
+				}
+				if (in_array($field, array('focus_keyword', 'seo_title', 'meta_description'), true) && !$plugin) {
+					return new WP_Error('seo_autopilot_no_seo_plugin', 'No SEO plugin active', array('status' => 400));
+				}
+				if (!seo_autopilot_same_value($current, $change['expected'] ?? '')) {
+					return new WP_Error('seo_autopilot_changed', 'The product changed since the suggestion', array('status' => 409, 'field' => $field));
+				}
+			}
+
+			// 2. Se aplican.
+			foreach ($changes as $change) {
+				$field = (string) $change['field'];
+				$value = $change['value'] ?? '';
+				if ($field === 'tags') {
+					$tags = array_values(array_filter(array_map(function ($t) {
+						return sanitize_text_field((string) $t);
+					}, is_array($value) ? $value : array()), 'strlen'));
+					wp_set_object_terms($product->get_id(), $tags, 'product_tag', false);
+				} elseif ($field === 'short_description') {
+					$product->set_short_description(wp_kses_post((string) $value));
+				} elseif (preg_match('/^image_alt:(\d+)$/', $field, $m)) {
+					update_post_meta((int) $m[1], '_wp_attachment_image_alt', sanitize_text_field((string) $value));
+				} else {
+					update_post_meta($product->get_id(), seo_autopilot_seo_meta_key($field, $plugin), sanitize_text_field((string) $value));
+				}
+			}
+			$product->save();
+			clean_post_cache($product->get_id());
+			seo_autopilot_refresh_seo_cache($product->get_id());
+			return seo_autopilot_product_snapshot(wc_get_product($product->get_id()));
 		},
 	));
 });

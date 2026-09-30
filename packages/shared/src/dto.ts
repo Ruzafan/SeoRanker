@@ -2,6 +2,7 @@ import type { ArticleStatus, JobType, KeywordStatus } from './schemas.js';
 import type { SeoPlugin, SiteSettings } from './settings.js';
 import type { WarningCode } from './errors.js';
 import type { TrafficChannel } from './traffic.js';
+import type { ProductField, ProductIssue, ProductSnapshot } from './products.js';
 
 /** Todas las fechas viajan como ISO string. Nunca se incluye `credentials`. */
 export interface UserDto {
@@ -436,4 +437,48 @@ export interface AiVisibilityDto {
   history: { date: string; mentionRate: number }[];
   /** Dominios que más citan los asistentes en las últimas ejecuciones. */
   topCompetitors: { domain: string; count: number }[];
+}
+
+// ---- Productos -------------------------------------------------------------
+export interface ProductSummaryDto {
+  id: string;
+  remoteId: number;
+  name: string;
+  url: string;
+  image: string | null;
+  score: number;
+  issues: ProductIssue[];
+  pendingSuggestions: number;
+  analyzedAt: string | null;
+  /** Hay un análisis con Claude en marcha. */
+  analyzing: boolean;
+}
+
+export interface ProductsOverviewDto {
+  scannedAt: string | null;
+  scanning: boolean;
+  total: number;
+  averageScore: number | null;
+  issues: { issue: ProductIssue; count: number }[];
+  /** false si el conector no expone los productos (sin WooCommerce o conector < 1.3.0). */
+  supported: boolean;
+  quota: { used: number; limit: number; batch: boolean };
+}
+
+export interface ProductSuggestionDto {
+  id: string;
+  field: ProductField;
+  /** fill = el campo estaba vacío; improve = sustituye un valor que ya tenías. */
+  kind: 'fill' | 'improve';
+  before: string | null;
+  after: string;
+  reason: string | null;
+  status: 'pending' | 'applied' | 'rejected' | 'reverted';
+  createdAt: string;
+  decidedAt: string | null;
+}
+
+export interface ProductDto extends ProductSummaryDto {
+  snapshot: ProductSnapshot;
+  suggestions: ProductSuggestionDto[];
 }

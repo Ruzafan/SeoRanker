@@ -1,7 +1,9 @@
 import {
   CONNECTOR_VERSION,
+  CONNECTOR_VERSION_PRODUCTS,
   isOlderVersion,
   type ConnectionDetails,
+  type ProductSnapshot,
   type SeoPlugin,
   type WarningCode,
 } from '@seo/shared';
@@ -15,6 +17,7 @@ import type {
   ConnectionResult,
   PostInfo,
   PostVisits,
+  ProductChange,
   ContentItem,
   ContentSample,
   CreatePostInput,
@@ -146,10 +149,17 @@ export class WordPressAdapter implements PublishingAdapter {
 
     if (res.ok) return (await res.json()) as T;
 
-    const detail = await res
-      .json()
-      .then((j: unknown) => (j as { message?: string }).message ?? '')
-      .catch(() => '');
+    const body = (await res.json().catch(() => null)) as { message?: string; code?: string } | null;
+    const detail = body?.message ?? '';
+    if (res.status === 409 && body?.code === 'seo_autopilot_changed') {
+      throw new AppError(
+        'PRODUCT_CHANGED',
+        'The product changed in the store since the suggestion',
+        {
+          httpStatus: 409,
+        },
+      );
+    }
     if (res.status === 401 || res.status === 403) {
       throw new AppError('WP_AUTH_FAILED', `WordPress rejected the credentials (${res.status})`, {
         httpStatus: 400,
@@ -434,6 +444,39 @@ export class WordPressAdapter implements PublishingAdapter {
       if (err instanceof AppError && err.code === 'WP_REST_NOT_FOUND') return null;
       throw err;
     }
+  }
+
+  async listProducts(
+    page: number,
+    ids?: number[],
+  ): Promise<{ products: ProductSnapshot[]; hasMore: boolean } | null> {
+    const env = await this.environment();
+    if (
+      !env.woocommerce ||
+      env.connectorVersion === null ||
+      isOlderVersion(env.connectorVersion, CONNECTOR_VERSION_PRODUCTS)
+    ) {
+      return null;
+    }
+    const idsParam = ids?.length ? `&ids=${ids.join(',')}` : '';
+    try {
+      return await this.requestUrl<{ products: ProductSnapshot[]; hasMore: boolean }>(
+        `${this.base}/wp-json/seo-autopilot/v1/products?page=${page}${idsParam}`,
+      );
+    } catch (err) {
+      if (err instanceof AppError && err.code === 'WP_REST_NOT_FOUND') return null;
+      throw err;
+    }
+  }
+
+  async updateProduct(id: number, changes: ProductChange[]): Promise<ProductSnapshot> {
+    return this.requestUrl<ProductSnapshot>(
+      `${this.base}/wp-json/seo-autopilot/v1/products/${id}`,
+      {
+        method: 'POST',
+        body: { changes },
+      },
+    );
   }
 
   private toBody(input: Partial<CreatePostInput>): Record<string, unknown> {

@@ -7,7 +7,9 @@ export const SEO_PLUGINS = ['yoast', 'rankmath'] as const;
 export type SeoPlugin = (typeof SEO_PLUGINS)[number];
 
 /** Versión del plugin de WordPress que distribuye el panel (apps/wp-plugin). */
-export const CONNECTOR_VERSION = '1.2.0';
+export const CONNECTOR_VERSION = '1.3.0';
+/** Primera versión del conector que lee y edita el SEO de los productos. */
+export const CONNECTOR_VERSION_PRODUCTS = '1.3.0';
 /** Primera versión del conector que cuenta las visitas por artículo y su procedencia. */
 export const CONNECTOR_VERSION_VISITS = '1.2.0';
 

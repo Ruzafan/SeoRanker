@@ -1,4 +1,4 @@
-import type { ConnectionDetails, WarningCode } from '@seo/shared';
+import type { ConnectionDetails, ProductSnapshot, WarningCode } from '@seo/shared';
 
 export interface CreatePostInput {
   title: string;
@@ -77,6 +77,13 @@ export interface PostVisits {
   visits: number;
 }
 
+/** Cambio en un campo de un producto; `expected` es el valor que debe tener aún en la tienda. */
+export interface ProductChange {
+  field: string;
+  value: string | string[];
+  expected: string | string[];
+}
+
 export interface ConnectionResult {
   ok: boolean;
   /** "OK" o un código de error (WP_AUTH_FAILED, CONNECTION_FAILED…). */
@@ -111,6 +118,13 @@ export interface PublishingAdapter {
   ): Promise<{ orders: AttributedOrder[]; hasMore: boolean } | null>;
   /** Visitas desde `after` (YYYY-MM-DD); null si el conector no las cuenta. */
   listVisits(after: string): Promise<PostVisits[] | null>;
+  /** Productos publicados (50 por página, o los `ids` indicados); null sin conector 1.3.0+. */
+  listProducts(
+    page: number,
+    ids?: number[],
+  ): Promise<{ products: ProductSnapshot[]; hasMore: boolean } | null>;
+  /** Aplica cambios a un producto (todo o nada). PRODUCT_CHANGED si algo cambió en la tienda. */
+  updateProduct(id: number, changes: ProductChange[]): Promise<ProductSnapshot>;
 }
 
 export { WordPressAdapter, type WordPressAdapterOptions } from './wordpress.js';

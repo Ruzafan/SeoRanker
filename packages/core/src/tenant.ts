@@ -1,4 +1,4 @@
-import type { Article, Keyword, Prisma, PrismaClient, Site } from '@seo/db';
+import type { Article, Keyword, Prisma, PrismaClient, Product, Site } from '@seo/db';
 import { notFound } from './errors.js';
 
 /**
@@ -8,7 +8,15 @@ import { notFound } from './errors.js';
  */
 export type Db = Pick<
   PrismaClient,
-  'keyword' | 'article' | 'jobRun' | 'usageRecord' | 'site' | 'organization' | 'user'
+  | 'keyword'
+  | 'article'
+  | 'jobRun'
+  | 'usageRecord'
+  | 'site'
+  | 'organization'
+  | 'user'
+  | 'product'
+  | 'productSuggestion'
 >;
 
 /** El sitio existe y pertenece a la organización, o NOT_FOUND. */
@@ -40,6 +48,16 @@ export async function requireArticle(
   const article = await prisma.article.findFirst({ where: { id, site: { organizationId } } });
   if (!article) throw notFound('Article');
   return article;
+}
+
+export async function requireProduct(
+  prisma: Db,
+  organizationId: string,
+  id: string,
+): Promise<Product> {
+  const product = await prisma.product.findFirst({ where: { id, site: { organizationId } } });
+  if (!product) throw notFound('Product');
+  return product;
 }
 
 /** Acceso a datos de UN sitio, con `siteId` forzado en cada operación. */
