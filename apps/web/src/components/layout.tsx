@@ -1,3 +1,4 @@
+import { platformCapabilities, type PlatformCapabilities } from '@seo/shared';
 import {
   BookOpenText,
   CalendarDays,
@@ -28,6 +29,8 @@ interface NavItem {
   label: string;
   icon: LucideIcon;
   end?: boolean;
+  /** Solo en plataformas que lo permiten (una web genérica no tiene productos ni publica). */
+  requires?: keyof PlatformCapabilities;
 }
 
 const siteNav: NavItem[] = [
@@ -35,13 +38,19 @@ const siteNav: NavItem[] = [
   { to: 'performance', label: 'Rendimiento', icon: LineChart },
   { to: 'keywords', label: 'Keywords', icon: KeyRound },
   { to: 'articles', label: 'Artículos', icon: FileText },
-  { to: 'products', label: 'Productos', icon: ShoppingBag },
-  { to: 'calendar', label: 'Calendario', icon: CalendarDays },
+  { to: 'products', label: 'Productos', icon: ShoppingBag, requires: 'products' },
+  { to: 'calendar', label: 'Calendario', icon: CalendarDays, requires: 'publishing' },
   { to: 'report', label: 'Informe', icon: ClipboardList },
   { to: 'voice', label: 'Voz de marca', icon: Mic2 },
   { to: 'jobs', label: 'Trabajos', icon: ListChecks },
   { to: 'settings', label: 'Ajustes', icon: Settings },
 ];
+
+function navFor(platform: string | undefined): NavItem[] {
+  if (!platform) return siteNav;
+  const caps = platformCapabilities(platform);
+  return siteNav.filter((i) => !i.requires || caps[i.requires]);
+}
 
 function TopBar({ siteName }: { siteName?: string | undefined }) {
   const { data: me } = useMe();
@@ -128,6 +137,7 @@ export function SiteLayout() {
   const { siteId = '' } = useParams();
   const { data: site, isLoading } = useSite(siteId);
   useRefreshWhenIdle(siteId);
+  const nav = navFor(site?.platform);
 
   return (
     <div className="min-h-screen">
@@ -138,7 +148,7 @@ export function SiteLayout() {
           aria-label="Secciones del sitio"
         >
           <ul className="sticky top-20 space-y-1">
-            {siteNav.map((i) => (
+            {nav.map((i) => (
               <li key={i.to}>
                 <NavLink
                   to={i.to}
@@ -161,7 +171,7 @@ export function SiteLayout() {
         </nav>
         <main className="min-w-0 flex-1 pb-20 md:pb-0">{isLoading ? <Spinner /> : <Outlet />}</main>
       </div>
-      <MobileNav />
+      <MobileNav nav={nav} />
     </div>
   );
 }
@@ -169,12 +179,12 @@ export function SiteLayout() {
 /** En móvil caben 4 secciones legibles; el resto va en «Más». */
 const MOBILE_PRIMARY = ['', 'performance', 'keywords', 'articles'];
 
-function MobileNav() {
+function MobileNav({ nav }: { nav: NavItem[] }) {
   const [open, setOpen] = useState(false);
   const { pathname } = useLocation();
   useEffect(() => setOpen(false), [pathname]);
-  const primary = siteNav.filter((i) => MOBILE_PRIMARY.includes(i.to));
-  const more = siteNav.filter((i) => !MOBILE_PRIMARY.includes(i.to));
+  const primary = nav.filter((i) => MOBILE_PRIMARY.includes(i.to));
+  const more = nav.filter((i) => !MOBILE_PRIMARY.includes(i.to));
   const item = (active: boolean) =>
     cx(
       'flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium',

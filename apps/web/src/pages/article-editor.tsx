@@ -1,4 +1,5 @@
-import { ArrowLeft, ExternalLink, RefreshCw, Save, Send, Trash2 } from 'lucide-react';
+import { platformCapabilities } from '@seo/shared';
+import { ArrowLeft, Check, Copy, ExternalLink, RefreshCw, Save, Send, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -18,6 +19,7 @@ import {
   useArticle,
   useDeleteArticle,
   useJobs,
+  useMarkPublished,
   usePatchArticle,
   usePublishArticle,
   useRegenerateArticle,
@@ -66,6 +68,7 @@ export function ArticleEditorPage() {
   const { data: jobs } = useJobs(siteId);
   const patch = usePatchArticle(siteId, articleId);
   const publish = usePublishArticle(siteId, articleId);
+  const markPublished = useMarkPublished(siteId, articleId);
   const regenerate = useRegenerateArticle(siteId, articleId);
   const del = useDeleteArticle(siteId, articleId);
 
@@ -99,10 +102,13 @@ export function ArticleEditorPage() {
   const busy = article.status === 'writing' || article.status === 'publishing';
   const failedJob = [lastPublishJob, lastWriteJob].find((j) => j?.status === 'failed');
   const jobError = parseJobError(failedJob?.error ?? null);
+  // Web genérica: no hay conector; el artículo se copia y se publica a mano.
+  const canPublish = !site || platformCapabilities(site.platform).publishing;
   const yoastWarn =
-    site?.settings.yoastMetaExposed === false ||
-    (Array.isArray(lastPublishJob?.meta?.['warnings']) &&
-      (lastPublishJob.meta['warnings'] as string[]).includes('YOAST_META_NOT_EXPOSED'));
+    canPublish &&
+    (site?.settings.yoastMetaExposed === false ||
+      (Array.isArray(lastPublishJob?.meta?.['warnings']) &&
+        (lastPublishJob.meta['warnings'] as string[]).includes('YOAST_META_NOT_EXPOSED')));
 
   const save = async (): Promise<boolean> => {
     const res = await withToast(
@@ -120,6 +126,24 @@ export function ArticleEditorPage() {
     );
   };
   const live = article.remoteStatus === 'publish';
+
+  const copyHtml = async () => {
+    try {
+      await navigator.clipboard.writeText(html);
+      toast.success('HTML copiado. Pégalo en el editor de tu web (modo HTML/código).');
+    } catch {
+      toast.error('No se pudo copiar. Ábrelo en «Editar HTML» y cópialo a mano.');
+    }
+  };
+  const onMarkPublished = async () => {
+    if (dirty && !(await save())) return;
+    const url = window.prompt(
+      '¿En qué URL has publicado este artículo? Así seguimos sus posiciones en Google.',
+      article.remoteUrl ?? `${site?.url ?? ''}/${article.slug}/`,
+    );
+    if (!url) return;
+    await withToast(markPublished.mutateAsync(url), 'Artículo marcado como publicado');
+  };
 
   const set =
     <T,>(setter: (v: T) => void) =>
@@ -159,7 +183,8 @@ export function ArticleEditorPage() {
               rel="noreferrer"
               className="inline-flex items-center gap-1 text-sm text-teal-700 hover:underline dark:text-teal-400"
             >
-              Ver en WordPress <ExternalLink className="h-3.5 w-3.5" />
+              {canPublish ? 'Ver en WordPress' : 'Ver en la web'}{' '}
+              <ExternalLink className="h-3.5 w-3.5" />
             </a>
           )}
           <div className="ml-auto flex flex-wrap items-center gap-2">
@@ -174,7 +199,27 @@ export function ArticleEditorPage() {
                 Guardar cambios
               </Button>
             )}
-            {!live && (
+            {!canPublish && (
+              <>
+                <Button
+                  icon={Copy}
+                  variant="secondary"
+                  disabled={busy || !html}
+                  onClick={() => void copyHtml()}
+                >
+                  Copiar HTML
+                </Button>
+                <Button
+                  icon={Check}
+                  disabled={busy || !html}
+                  loading={markPublished.isPending}
+                  onClick={() => void onMarkPublished()}
+                >
+                  {live ? 'Cambiar URL publicada' : 'Marcar como publicado'}
+                </Button>
+              </>
+            )}
+            {canPublish && !live && (
               <Button
                 variant="secondary"
                 disabled={busy || !html}
@@ -184,14 +229,16 @@ export function ArticleEditorPage() {
                 {article.remotePostId ? 'Actualizar borrador' : 'Guardar como borrador'}
               </Button>
             )}
-            <Button
-              icon={Send}
-              disabled={busy || !html}
-              loading={publish.isPending && publish.variables === 'publish'}
-              onClick={() => void onPublish('publish')}
-            >
-              {live ? 'Actualizar publicado' : 'Publicar ahora'}
-            </Button>
+            {canPublish && (
+              <Button
+                icon={Send}
+                disabled={busy || !html}
+                loading={publish.isPending && publish.variables === 'publish'}
+                onClick={() => void onPublish('publish')}
+              >
+                {live ? 'Actualizar publicado' : 'Publicar ahora'}
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -296,11 +343,19 @@ export function ArticleEditorPage() {
               )}
             </div>
           </Card>
-          <p className="text-xs text-stone-500">
-            «Publicar ahora» lo deja visible en tu web; «Guardar como borrador» lo deja en WordPress
-            para revisarlo allí. Lo que genera la automatización sale{' '}
-            {site?.settings.autoPublish ? 'publicado' : 'como borrador'} (se cambia en Ajustes).
-          </p>
+          {canPublish ? (
+            <p className="text-xs text-stone-500">
+              «Publicar ahora» lo deja visible en tu web; «Guardar como borrador» lo deja en
+              WordPress para revisarlo allí. Lo que genera la automatización sale{' '}
+              {site?.settings.autoPublish ? 'publicado' : 'como borrador'} (se cambia en Ajustes).
+            </p>
+          ) : (
+            <p className="text-xs text-stone-500">
+              Esta web no está conectada para publicar: copia el HTML, publícalo en tu web y pulsa
+              «Marcar como publicado» con su URL. Desde entonces verás sus posiciones y clics en
+              Rendimiento (con Search Console conectado).
+            </p>
+          )}
         </div>
 
         <aside className="min-w-0 space-y-4">
@@ -312,7 +367,7 @@ export function ArticleEditorPage() {
             html={html}
             targetWords={site?.settings.wordCount ?? 1200}
           />
-          <WorkflowPanel siteId={siteId} article={article} />
+          <WorkflowPanel siteId={siteId} article={article} canSchedule={canPublish} />
           {article.serp && <SerpPanel serp={article.serp} />}
           <Card className="space-y-2">
             <h2 className="text-sm font-medium">Más acciones</h2>

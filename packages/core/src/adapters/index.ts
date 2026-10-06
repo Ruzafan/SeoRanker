@@ -92,12 +92,16 @@ export interface ConnectionResult {
   warnings?: WarningCode[];
 }
 
-export interface PublishingAdapter {
-  testConnection(): Promise<ConnectionResult>;
+/** Lo que se lee del sitio para analizarlo; lo cumple cualquier plataforma (ver crawler.ts). */
+export interface SiteReader {
   listContent(limit: number): Promise<ContentItem[]>;
   getSamples(limit: number): Promise<ContentSample[]>;
   /** Nombres de categorías (de producto primero), las más usadas antes. Para deducir seeds. */
   listCategories(limit: number): Promise<string[]>;
+}
+
+export interface PublishingAdapter extends SiteReader {
+  testConnection(): Promise<ConnectionResult>;
   createPost(
     input: CreatePostInput,
   ): Promise<{ id: number; url: string; warnings?: WarningCode[] }>;
@@ -129,3 +133,4 @@ export interface PublishingAdapter {
 
 export { WordPressAdapter, type WordPressAdapterOptions } from './wordpress.js';
 export { ShopifyAdapter } from './shopify.js';
+export { CrawlerReader, type CrawlerReaderOptions } from './crawler.js';

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { PRODUCT_ISSUES } from './products.js';
-import { INVITABLE_ROLES, PAID_PLAN_IDS, PLATFORM_IDS } from './plans.js';
+import { INVITABLE_ROLES, PAID_PLAN_IDS, PLATFORM_IDS, PLATFORMS } from './plans.js';
 import { editableSettingsSchema } from './settings.js';
 
 // ---- Auth ----------------------------------------------------------------
@@ -21,16 +21,24 @@ export type LoginInput = z.infer<typeof loginSchema>;
 const langSchema = z.string().trim().toLowerCase().length(2);
 const countrySchema = z.string().trim().toUpperCase().length(2);
 
-export const createSiteSchema = z.object({
-  name: z.string().trim().min(1).max(100),
-  url: z.string().trim().min(3).max(300),
-  language: langSchema,
-  country: countrySchema,
-  /** Las no disponibles se rechazan en el servicio con PLATFORM_NOT_SUPPORTED. */
-  platform: z.enum(PLATFORM_IDS).default('wordpress'),
-  wpUsername: z.string().trim().min(1).max(100),
-  wpAppPassword: z.string().trim().min(8).max(200),
-});
+export const createSiteSchema = z
+  .object({
+    name: z.string().trim().min(1).max(100),
+    url: z.string().trim().min(3).max(300),
+    language: langSchema,
+    country: countrySchema,
+    /** Las no disponibles se rechazan en el servicio con PLATFORM_NOT_SUPPORTED. */
+    platform: z.enum(PLATFORM_IDS).default('wordpress'),
+    wpUsername: z.string().trim().min(1).max(100).optional(),
+    wpAppPassword: z.string().trim().min(8).max(200).optional(),
+  })
+  .superRefine((v, ctx) => {
+    // Solo las plataformas con conector piden credenciales (una web genérica solo se analiza).
+    if (!PLATFORMS[v.platform].needsCredentials) return;
+    if (!v.wpUsername) ctx.addIssue({ code: 'custom', path: ['wpUsername'], message: 'Required' });
+    if (!v.wpAppPassword)
+      ctx.addIssue({ code: 'custom', path: ['wpAppPassword'], message: 'Required' });
+  });
 export type CreateSiteInput = z.infer<typeof createSiteSchema>;
 
 export const updateSiteSchema = z
@@ -166,6 +174,10 @@ export type ArticleQuery = z.infer<typeof articleQuerySchema>;
 /** Enviar a WordPress: publicar ya o dejar borrador. Sin `status`, según los ajustes del sitio. */
 export const publishArticleSchema = z.object({ status: z.enum(['publish', 'draft']).optional() });
 export type PublishArticleInput = z.infer<typeof publishArticleSchema>;
+
+/** Webs sin publicación automática: el usuario pega la URL donde publicó el artículo a mano. */
+export const markPublishedSchema = z.object({ url: z.string().trim().min(3).max(500) });
+export type MarkPublishedInput = z.infer<typeof markPublishedSchema>;
 
 // ---- Jobs ----------------------------------------------------------------
 export const JOB_TYPES = [

@@ -7,7 +7,7 @@ import {
   normalizeTerm,
   questionModifiers,
 } from '../keywords/provider.js';
-import { assertPublicDestination, normalizeSiteUrl } from '../url.js';
+import { normalizeSiteUrl, safeFetch } from '../url.js';
 
 export interface DemoDeps {
   fetchFn?: typeof fetch | undefined;
@@ -37,18 +37,12 @@ export async function runDemo(
   const hit = cache.get(`${host}|${language}|${country}`);
   if (hit && Date.now() - hit.at < CACHE_MS) return hit.result;
 
-  const fetchFn = deps.fetchFn ?? fetch;
   const get = async (target: string): Promise<Response | null> => {
-    try {
-      if (!deps.allowPrivateHosts) await assertPublicDestination(target);
-      const res = await fetchFn(target, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; SEOAutopilot/1.0)' },
-        signal: AbortSignal.timeout(8_000),
-      });
-      return res.ok ? res : null;
-    } catch {
-      return null;
-    }
+    const r = await safeFetch(target, {
+      allowPrivate: deps.allowPrivateHosts,
+      fetchFn: deps.fetchFn,
+    });
+    return r?.res.ok ? r.res : null;
   };
 
   let siteName: string | null = null;

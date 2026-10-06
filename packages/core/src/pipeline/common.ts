@@ -1,10 +1,11 @@
 import type { Site } from '@seo/db';
 import { parseSettings } from '@seo/shared';
-import type { PublishingAdapter } from '../adapters/index.js';
-import { createAdapter } from '../adapters/factory.js';
+import type { PublishingAdapter, SiteReader } from '../adapters/index.js';
+import { createAdapter, createReader } from '../adapters/factory.js';
 import type { SiteContext } from '../ai/prompts/shared.js';
 import { DataForSeoProvider, type KeywordMetricsProvider } from '../keywords/metrics.js';
 import { notFound } from '../errors.js';
+import { assertCapability } from '../platform.js';
 import type { PipelineContext } from './context.js';
 
 export async function loadSite(ctx: PipelineContext, siteId: string): Promise<Site> {
@@ -33,9 +34,21 @@ export function modelFor(ctx: PipelineContext, site: Site): string {
   return parseSettings(site.settings).model ?? ctx.config.defaultModel;
 }
 
+/** Para escribir en el sitio (publicar, productos, pedidos). Una web genérica no lo permite. */
 export function adapterFor(ctx: PipelineContext, site: Site): PublishingAdapter {
+  assertCapability(site, 'publishing');
   if (ctx.adapterFactory) return ctx.adapterFactory(site);
   return createAdapter(site, {
+    encryptionKey: ctx.encryptionKey,
+    allowPrivateHosts: ctx.config.allowPrivateHosts,
+    fetchFn: ctx.fetchFn,
+  });
+}
+
+/** Para leer el sitio (analizar): también webs genéricas, que se rastrean (con ctx.fetchFn). */
+export function readerFor(ctx: PipelineContext, site: Site): SiteReader {
+  if (ctx.adapterFactory && site.platform !== 'generic') return ctx.adapterFactory(site);
+  return createReader(site, {
     encryptionKey: ctx.encryptionKey,
     allowPrivateHosts: ctx.config.allowPrivateHosts,
     fetchFn: ctx.fetchFn,

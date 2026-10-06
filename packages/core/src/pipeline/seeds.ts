@@ -8,7 +8,7 @@ import {
   seedKeywordsUser,
 } from '../ai/prompts/seed-keywords.js';
 import { normalizeTerm } from '../keywords/provider.js';
-import { adapterFor, loadSite, modelFor, siteContext } from './common.js';
+import { loadSite, modelFor, readerFor, siteContext } from './common.js';
 import type { PipelineContext, RunInfo } from './context.js';
 import { runTracked } from './run-tracked.js';
 import type { UsageTracker } from './usage.js';
@@ -29,7 +29,7 @@ export async function generateSeeds(
   tracker: UsageTracker,
   existing: string[] = [],
 ): Promise<string[]> {
-  const adapter = adapterFor(ctx, site);
+  const adapter = readerFor(ctx, site);
   const [content, categories] = await Promise.all([
     adapter.listContent(CONTENT_LIMIT),
     adapter.listCategories(CATEGORY_LIMIT),

@@ -1,5 +1,11 @@
 import type { Site } from '@seo/db';
-import { parseSettings, planFor, referrerHost, trafficChannel } from '@seo/shared';
+import {
+  parseSettings,
+  planFor,
+  platformCapabilities,
+  referrerHost,
+  trafficChannel,
+} from '@seo/shared';
 import type { AttributedOrder } from '../adapters/index.js';
 import { decryptJson } from '../crypto.js';
 import { errorCode, errorMessage } from '../errors.js';
@@ -443,6 +449,7 @@ async function syncOrders(ctx: PipelineContext, site: Site, now: Date): Promise<
     where: { id: site.organizationId },
     select: { plan: true },
   });
+  if (!platformCapabilities(site.platform).orders) return { skipped: 'NOT_SUPPORTED' };
   if (!planFor(org.plan).revenueAttribution) return { skipped: 'PLAN_FEATURE_REQUIRED' };
   const settings = parseSettings(site.settings);
   if (settings.woocommerce === false) return { skipped: 'NO_WOOCOMMERCE' };
@@ -511,6 +518,7 @@ export function orderSource(o: AttributedOrder): { channel: string; source: stri
  * Google, asistentes de IA, redes... Se reemplaza el rango entero en cada pasada.
  */
 async function syncVisits(ctx: PipelineContext, site: Site, now: Date): Promise<unknown> {
+  if (!platformCapabilities(site.platform).orders) return { skipped: 'NOT_SUPPORTED' };
   const from = dayStart(daysAgo(now, VISITS_DAYS));
   const rows = await adapterFor(ctx, site).listVisits(isoDate(from));
   if (!rows) return { skipped: 'NOT_SUPPORTED' };

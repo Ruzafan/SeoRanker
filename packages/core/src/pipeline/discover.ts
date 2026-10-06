@@ -1,4 +1,4 @@
-import { parseSettings } from '@seo/shared';
+import { parseSettings, platformCapabilities } from '@seo/shared';
 import {
   normalizeScore,
   scoreKeywordsSchema,
@@ -172,7 +172,11 @@ export function runDiscover(ctx: PipelineContext, info: RunInfo): Promise<void> 
         },
       },
     });
-    const firstArticle = onboarding ? await startFirstArticle(ctx, site.id) : undefined;
+    // Una web genérica es solo análisis: el primer artículo no se redacta solo (gastaría cupo).
+    const firstArticle =
+      onboarding && platformCapabilities(site.platform).publishing
+        ? await startFirstArticle(ctx, site.id)
+        : undefined;
     // Keywords nuevas: se reagrupan los clusters (pilar + satélites).
     if (inserted > 0)
       await ctx.dispatcher.enqueue('cluster', { siteId: site.id }).catch(() => undefined);

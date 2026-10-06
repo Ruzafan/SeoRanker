@@ -31,7 +31,7 @@ export function ArticlesPage() {
     <>
       <PageHeader
         title="Artículos"
-        description="Revisa, edita y publica en WordPress los artículos generados."
+        description="Revisa, edita y publica los artículos generados."
       />
       <select
         className={cx(inputClass, 'mb-3 sm:w-56')}

@@ -1,4 +1,4 @@
-import { PLAN_IDS, PLANS, parseSettings, type Cadence } from '@seo/shared';
+import { PLAN_IDS, PLANS, parseSettings, platformCapabilities, type Cadence } from '@seo/shared';
 import { errorCode } from '../errors.js';
 import type { PipelineContext } from './context.js';
 import { assertQuota } from './quota.js';
@@ -25,11 +25,13 @@ export interface SchedulerResult {
  */
 async function publishDue(
   ctx: PipelineContext,
-  sites: { id: string; settings: unknown }[],
+  sites: { id: string; platform: string; settings: unknown }[],
   now: Date,
 ): Promise<number> {
   let count = 0;
   for (const site of sites) {
+    // Sin publicación (web genérica) los artículos se publican a mano: nada que programar.
+    if (!platformCapabilities(site.platform).publishing) continue;
     const settings = parseSettings(site.settings);
     const due = await ctx.prisma.article.findMany({
       where: {
@@ -97,7 +99,8 @@ export async function runScheduler(
         await ctx.dispatcher.enqueue('outline', {
           siteId: site.id,
           refId: keyword.id,
-          chain: 'publish',
+          // Una web genérica no publica: el artículo queda listo para copiarlo.
+          chain: platformCapabilities(site.platform).publishing ? 'publish' : 'ready',
         });
         await mark(ctx, site.id, now, { action: 'generate', keywordId: keyword.id });
         result.generated++;

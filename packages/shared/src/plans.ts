@@ -148,13 +148,60 @@ export function articlesPerMonthFor(plan: string, freePlanMaxArticles: number): 
   return def.id === 'free' ? freePlanMaxArticles : def.articlesPerMonth;
 }
 
-export const PLATFORM_IDS = ['wordpress', 'shopify'] as const;
+export const PLATFORM_IDS = ['wordpress', 'generic', 'shopify'] as const;
 export type PlatformId = (typeof PLATFORM_IDS)[number];
 
-export const PLATFORMS: Record<PlatformId, { id: PlatformId; name: string; available: boolean }> = {
-  wordpress: { id: 'wordpress', name: 'WordPress / WooCommerce', available: true },
-  shopify: { id: 'shopify', name: 'Shopify', available: false },
+/** Lo que la plataforma permite además de analizar (que lo permiten todas). */
+export interface PlatformCapabilities {
+  /** Publicar y editar artículos en el sitio (y el enlazado inverso, que reescribe posts). */
+  publishing: boolean;
+  /** Fichas de producto y tarjetas de producto en los artículos. */
+  products: boolean;
+  /** Pedidos y visitas atribuidos (conector). */
+  orders: boolean;
+}
+
+export interface PlatformDef {
+  id: PlatformId;
+  name: string;
+  available: boolean;
+  /** Pide usuario y contraseña de aplicación al dar de alta. */
+  needsCredentials: boolean;
+  capabilities: PlatformCapabilities;
+}
+
+const ALL: PlatformCapabilities = { publishing: true, products: true, orders: true };
+const NONE: PlatformCapabilities = { publishing: false, products: false, orders: false };
+
+export const PLATFORMS: Record<PlatformId, PlatformDef> = {
+  wordpress: {
+    id: 'wordpress',
+    name: 'WordPress / WooCommerce',
+    available: true,
+    needsCredentials: true,
+    capabilities: ALL,
+  },
+  // Cualquier web pública: se rastrea para analizarla; los artículos se copian a mano.
+  generic: {
+    id: 'generic',
+    name: 'Otra web (solo análisis)',
+    available: true,
+    needsCredentials: false,
+    capabilities: NONE,
+  },
+  shopify: {
+    id: 'shopify',
+    name: 'Shopify',
+    available: false,
+    needsCredentials: true,
+    capabilities: ALL,
+  },
 };
+
+/** Capacidades de la plataforma de un sitio; una desconocida no permite nada salvo analizar. */
+export function platformCapabilities(platform: string): PlatformCapabilities {
+  return platform in PLATFORMS ? PLATFORMS[platform as PlatformId].capabilities : NONE;
+}
 
 export const AVAILABLE_PLATFORMS = PLATFORM_IDS.filter((p) => PLATFORMS[p].available);
 

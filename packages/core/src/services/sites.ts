@@ -4,14 +4,17 @@ import {
   PLATFORMS,
   parseSettings,
   planFor,
+  platformCapabilities,
   type ConnectionTestDto,
   type CreateSiteInput,
   type EnqueuedDto,
   type UpdateSiteInput,
 } from '@seo/shared';
 import { createAdapter, readCredentials } from '../adapters/factory.js';
+import { CrawlerReader } from '../adapters/crawler.js';
 import { decryptJson, encryptJson, type SiteCredentials } from '../crypto.js';
-import { AppError } from '../errors.js';
+import { AppError, errorCode } from '../errors.js';
+import { canReadSite } from '../platform.js';
 import { requireSite } from '../tenant.js';
 import { normalizeSiteUrl } from '../url.js';
 import type { CoreDeps } from './deps.js';
@@ -36,10 +39,11 @@ export async function createSite(
   }
   await assertSiteLimit(deps, organizationId);
   const url = normalizeSiteUrl(input.url, { allowPrivate: deps.config.allowPrivateHosts });
-  const credentials: SiteCredentials = {
-    username: input.wpUsername,
-    appPassword: input.wpAppPassword,
-  };
+  // Una web genérica no tiene conector: se analiza rastreándola, sin credenciales.
+  const credentials: SiteCredentials | null =
+    PLATFORMS[input.platform].needsCredentials && input.wpUsername && input.wpAppPassword
+      ? { username: input.wpUsername, appPassword: input.wpAppPassword }
+      : null;
   const site = await deps.prisma.site.create({
     data: {
       organizationId,
@@ -48,7 +52,7 @@ export async function createSite(
       platform: input.platform,
       language: input.language,
       country: input.country,
-      credentials: encryptJson(deps.encryptionKey, credentials),
+      credentials: credentials ? encryptJson(deps.encryptionKey, credentials) : '',
       settings: { ...DEFAULT_SETTINGS, onboarding: 'pending' } as never,
     },
   });
@@ -95,6 +99,11 @@ export async function updateSite(
     data['url'] = normalizeSiteUrl(input.url, { allowPrivate: deps.config.allowPrivateHosts });
   }
   if (input.wpUsername !== undefined || input.wpAppPassword !== undefined) {
+    if (!PLATFORMS[site.platform as keyof typeof PLATFORMS]?.needsCredentials) {
+      throw new AppError('PLATFORM_NOT_SUPPORTED', `Platform ${site.platform} has no credentials`, {
+        httpStatus: 400,
+      });
+    }
     const current = readCredentials(site.credentials, deps.encryptionKey);
     const username = input.wpUsername ?? current?.username;
     const appPassword = input.wpAppPassword ?? current?.appPassword;
@@ -147,6 +156,7 @@ export async function testSiteConnection(
   siteId: string,
 ): Promise<ConnectionTestDto> {
   const site = await requireSite(deps.prisma, organizationId, siteId);
+  if (site.platform === 'generic') return testCrawl(deps, site);
   if (!readCredentials(site.credentials, deps.encryptionKey)) {
     return { ok: false, message: 'NO_CREDENTIALS', warnings: [] };
   }
@@ -178,13 +188,31 @@ export async function testSiteConnection(
   };
 }
 
+/** Web genérica: "conectar" es poder rastrearla (responde la portada y hay páginas con texto). */
+async function testCrawl(deps: CoreDeps, site: Site): Promise<ConnectionTestDto> {
+  const reader = new CrawlerReader({
+    baseUrl: site.url,
+    allowPrivateHosts: deps.config.allowPrivateHosts,
+    fetchFn: deps.fetchFn,
+    maxPages: 5,
+  });
+  try {
+    const pages = await reader.pages();
+    return pages.length
+      ? { ok: true, message: 'OK', warnings: [] }
+      : { ok: false, message: 'NO_CONTENT', warnings: [] };
+  } catch (err) {
+    return { ok: false, message: errorCode(err), warnings: [] };
+  }
+}
+
 export async function analyzeVoice(
   deps: CoreDeps,
   organizationId: string,
   siteId: string,
 ): Promise<EnqueuedDto> {
   const site = await requireSite(deps.prisma, organizationId, siteId);
-  if (!readCredentials(site.credentials, deps.encryptionKey)) {
+  if (!canReadSite(site, deps.encryptionKey)) {
     throw new AppError('NO_CREDENTIALS', 'Site has no credentials', { httpStatus: 400 });
   }
   return deps.dispatcher.enqueue('brand-voice', { siteId: site.id });
@@ -197,7 +225,7 @@ export async function suggestSeeds(
   siteId: string,
 ): Promise<EnqueuedDto> {
   const site = await requireSite(deps.prisma, organizationId, siteId);
-  if (!readCredentials(site.credentials, deps.encryptionKey)) {
+  if (!canReadSite(site, deps.encryptionKey)) {
     throw new AppError('NO_CREDENTIALS', 'Site has no credentials', { httpStatus: 400 });
   }
   return deps.dispatcher.enqueue('seeds', { siteId: site.id });
@@ -210,10 +238,7 @@ export async function discoverKeywords(
 ): Promise<EnqueuedDto> {
   const site = await requireSite(deps.prisma, organizationId, siteId);
   // Sin seeds, discover las deduce del contenido de la tienda: para eso necesita leerla.
-  if (
-    parseSettings(site.settings).seeds.length === 0 &&
-    !readCredentials(site.credentials, deps.encryptionKey)
-  ) {
+  if (parseSettings(site.settings).seeds.length === 0 && !canReadSite(site, deps.encryptionKey)) {
     throw new AppError('NO_CREDENTIALS', 'Site has no credentials to read its content', {
       httpStatus: 400,
     });
@@ -236,6 +261,7 @@ export async function listSiteAuthors(
   siteId: string,
 ): Promise<{ id: number; name: string }[]> {
   const site = await requireSite(deps.prisma, organizationId, siteId);
+  if (!platformCapabilities(site.platform).publishing) return [];
   return createAdapter(site, {
     encryptionKey: deps.encryptionKey,
     allowPrivateHosts: deps.config.allowPrivateHosts,

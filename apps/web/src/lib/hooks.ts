@@ -303,6 +303,10 @@ export const usePublishArticle = (siteId: string, id: string) =>
   useArticleMutation(siteId, id, (status?: 'publish' | 'draft') =>
     api.post<EnqueuedDto>(`/articles/${id}/publish`, status ? { status } : {}),
   );
+export const useMarkPublished = (siteId: string, id: string) =>
+  useArticleMutation(siteId, id, (url: string) =>
+    api.post<ArticleDto>(`/articles/${id}/mark-published`, { url }),
+  );
 export const useRegenerateArticle = (siteId: string, id: string) =>
   useArticleMutation(siteId, id, () => api.post<EnqueuedDto>(`/articles/${id}/regenerate`));
 export const useDeleteArticle = (siteId: string, id: string) =>

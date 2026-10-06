@@ -2,11 +2,13 @@ import type { Article, Prisma } from '@seo/db';
 import {
   parseSettings,
   planFor,
+  platformCapabilities,
   type ArticleDto,
   type ArticleQuery,
   type ArticleSummaryDto,
   type CommentDto,
   type EnqueuedDto,
+  type MarkPublishedInput,
   type Paginated,
   type PatchArticleInput,
   type PublishArticleInput,
@@ -14,7 +16,9 @@ import {
 } from '@seo/shared';
 import { AppError } from '../errors.js';
 import { countWords, sanitizeArticleHtml } from '../html.js';
+import { assertCapability } from '../platform.js';
 import { requireArticle, requireSite, siteScope } from '../tenant.js';
+import { normalizeSiteUrl } from '../url.js';
 import type { CoreDeps } from './deps.js';
 import { toArticleDto, toArticleSummary } from './mappers.js';
 
@@ -106,6 +110,8 @@ export async function publishArticle(
   if (article.status === 'writing' || article.status === 'publishing') {
     throw new AppError('INVALID_STATE', `Article is ${article.status}`, { httpStatus: 409 });
   }
+  const site = await deps.prisma.site.findUniqueOrThrow({ where: { id: article.siteId } });
+  assertCapability(site, 'publishing');
   // Un borrador no sale al público: no necesita la aprobación del cliente.
   if (input.status !== 'draft') await assertApproved(deps, article);
   const scope = siteScope(deps.prisma, article.siteId);
@@ -120,6 +126,50 @@ export async function publishArticle(
     await scope.articles.updateById(article.id, { status: article.status });
     throw err;
   }
+}
+
+/**
+ * Sitios sin publicación automática (web genérica): el usuario publica el artículo a mano y pega
+ * aquí su URL. Desde entonces cuenta como publicado y Search Console le asigna sus métricas.
+ */
+export async function markArticlePublished(
+  deps: CoreDeps,
+  organizationId: string,
+  id: string,
+  input: MarkPublishedInput,
+): Promise<Article> {
+  const article = await requireArticle(deps.prisma, organizationId, id);
+  const site = await deps.prisma.site.findUniqueOrThrow({ where: { id: article.siteId } });
+  if (platformCapabilities(site.platform).publishing) {
+    throw new AppError('INVALID_STATE', 'This site publishes through its connector', {
+      httpStatus: 409,
+    });
+  }
+  if (!article.contentHtml || article.status === 'writing' || article.status === 'publishing') {
+    throw new AppError('INVALID_STATE', `Article is ${article.status}`, { httpStatus: 409 });
+  }
+  const url = normalizeArticleUrl(input.url, site.url, deps.config.allowPrivateHosts);
+  await assertApproved(deps, article);
+  await siteScope(deps.prisma, article.siteId).articles.updateById(article.id, {
+    status: 'published',
+    remoteUrl: url,
+    remoteStatus: 'publish',
+    publishedAt: article.publishedAt ?? new Date(),
+  });
+  return requireArticle(deps.prisma, organizationId, id);
+}
+
+/** La URL tiene que ser una página del propio sitio (con o sin www). */
+function normalizeArticleUrl(raw: string, siteUrl: string, allowPrivate: boolean): string {
+  const withScheme = /^https?:\/\//i.test(raw.trim()) ? raw.trim() : `https://${raw.trim()}`;
+  normalizeSiteUrl(withScheme, { allowPrivate }); // valida esquema y host
+  const url = new URL(withScheme);
+  const bare = (h: string) => h.toLowerCase().replace(/^www\./, '');
+  if (bare(url.hostname) !== bare(new URL(siteUrl).hostname)) {
+    throw new AppError('INVALID_URL', 'The URL must belong to the site', { httpStatus: 400 });
+  }
+  url.hash = '';
+  return url.toString();
 }
 
 export async function regenerateArticle(
@@ -244,6 +294,7 @@ export async function reviewArticle(
   if (
     approved &&
     parseSettings(site.settings).autoPublish &&
+    platformCapabilities(site.platform).publishing &&
     !article.scheduledFor &&
     article.status === 'ready'
   ) {

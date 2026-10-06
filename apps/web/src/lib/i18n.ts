@@ -30,12 +30,14 @@ export const errorMessages: Record<ErrorCode | 'NETWORK_ERROR', string> = {
   WP_REST_NOT_FOUND:
     'No se encontró la API REST de WordPress en esa URL. Revisa la dirección y que los enlaces permanentes no estén en «Simple».',
   NO_CREDENTIALS: 'Este sitio no tiene credenciales de WordPress. Añádelas en Ajustes.',
+  NO_CONTENT: 'No hemos encontrado páginas con texto que analizar en esa web.',
   NO_SEEDS:
     'No hay semillas ni contenido publicado del que deducirlas. Publica algo en la tienda o añade semillas en Ajustes.',
   INVALID_STATE: 'Esa acción no se puede hacer en el estado actual.',
   PLAN_SITE_LIMIT:
     'Tu plan no admite más tiendas. Cambia de plan para conectar otra o elimina una que no uses.',
-  PLATFORM_NOT_SUPPORTED: 'Esa plataforma todavía no está disponible. De momento, WordPress.',
+  PLATFORM_NOT_SUPPORTED:
+    'Esta función necesita una web conectada (WordPress). En webs de solo análisis no está disponible.',
   BILLING_NOT_CONFIGURED: 'Los pagos no están activados en este servidor.',
   OWNER_REQUIRED: 'Solo el propietario de la cuenta puede hacer esto.',
   GOOGLE_NOT_CONFIGURED: 'La conexión con Google no está activada en este servidor.',

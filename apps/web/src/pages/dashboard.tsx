@@ -1,7 +1,7 @@
 import { CheckCircle2, Circle, Compass, FileText, KeyRound, Sparkles } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import type { KeywordDto, Paginated } from '@seo/shared';
+import { platformCapabilities, type KeywordDto, type Paginated } from '@seo/shared';
 import {
   Button,
   Card,
@@ -98,19 +98,33 @@ export function DashboardPage() {
     }
   };
 
+  // Web genérica (solo análisis): sin WordPress ni conector; los datos reales vienen de Search Console.
+  const canPublish = platformCapabilities(site.platform).publishing;
+  const connectSteps = canPublish
+    ? [
+        {
+          done: site.hasCredentials,
+          label: 'Conecta tu WordPress',
+          to: 'settings',
+          hint: 'Usuario y contraseña de aplicación.',
+        },
+        {
+          done: connectorState(site.settings) === 'ok',
+          label: 'Instala el conector',
+          to: 'settings',
+          hint: 'Plugin de un clic para la meta de Yoast/Rank Math y el FAQ en Google.',
+        },
+      ]
+    : [
+        {
+          done: !!perf?.period,
+          label: 'Conecta Search Console',
+          to: 'performance',
+          hint: 'Para ver en qué búsquedas sale tu web, en qué posición y con cuántos clics.',
+        },
+      ];
   const steps = [
-    {
-      done: site.hasCredentials,
-      label: 'Conecta tu WordPress',
-      to: 'settings',
-      hint: 'Usuario y contraseña de aplicación.',
-    },
-    {
-      done: connectorState(site.settings) === 'ok',
-      label: 'Instala el conector',
-      to: 'settings',
-      hint: 'Plugin de un clic para la meta de Yoast/Rank Math y el FAQ en Google.',
-    },
+    ...connectSteps,
     {
       done: !!site.brandVoice,
       label: 'Genera la voz de marca',
@@ -156,14 +170,25 @@ export function DashboardPage() {
 
       {site.settings.onboarding === 'pending' && (
         <div className="mb-6">
-          <Notice tone="blue" title="Estamos preparando tu primer artículo">
-            Analizamos el estilo de tu tienda y buscamos lo que tus clientes preguntan en Google. En
-            unos minutos tendrás un borrador listo para revisar en{' '}
-            <Link to="articles" className="underline">
-              Artículos
-            </Link>
-            .
-          </Notice>
+          {canPublish ? (
+            <Notice tone="blue" title="Estamos preparando tu primer artículo">
+              Analizamos el estilo de tu tienda y buscamos lo que tus clientes preguntan en Google.
+              En unos minutos tendrás un borrador listo para revisar en{' '}
+              <Link to="articles" className="underline">
+                Artículos
+              </Link>
+              .
+            </Notice>
+          ) : (
+            <Notice tone="blue" title="Estamos analizando tu web">
+              Leemos sus páginas para aprender su estilo y sus temas, y buscamos lo que la gente
+              pregunta en Google sobre ellos. En unos minutos tendrás las oportunidades en{' '}
+              <Link to="keywords" className="underline">
+                Keywords
+              </Link>
+              .
+            </Notice>
+          )}
         </div>
       )}
 
@@ -197,7 +222,7 @@ export function DashboardPage() {
         <Stat
           label="Publicados este mes"
           value={stats.publishedThisMonth}
-          sub="Enviados a WordPress"
+          sub={canPublish ? 'Enviados a WordPress' : 'Marcados como publicados'}
         />
         <Stat
           label="Por revisar"

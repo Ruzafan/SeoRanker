@@ -1,6 +1,7 @@
 import { decryptJson, type SiteCredentials } from '../crypto.js';
 import { AppError } from '../errors.js';
-import type { PublishingAdapter } from './index.js';
+import { CrawlerReader } from './crawler.js';
+import type { PublishingAdapter, SiteReader } from './index.js';
 import { WordPressAdapter } from './wordpress.js';
 
 export interface AdapterDeps {
@@ -42,4 +43,22 @@ export function createAdapter(
     allowPrivateHosts: deps.allowPrivateHosts,
     fetchFn: deps.fetchFn,
   });
+}
+
+/**
+ * Lo que se lee del sitio para analizarlo. Con conector, su API (más fiable); una web genérica se
+ * rastrea. Una plataforma sin capacidad de publicar no necesita credenciales.
+ */
+export function createReader(
+  site: { url: string; credentials: string; platform?: string },
+  deps: AdapterDeps,
+): SiteReader {
+  if (site.platform === 'generic') {
+    return new CrawlerReader({
+      baseUrl: site.url,
+      allowPrivateHosts: deps.allowPrivateHosts,
+      fetchFn: deps.fetchFn,
+    });
+  }
+  return createAdapter(site, deps);
 }

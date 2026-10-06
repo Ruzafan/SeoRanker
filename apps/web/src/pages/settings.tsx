@@ -8,6 +8,7 @@ import { z } from 'zod';
 import {
   PLANS,
   isPlanId,
+  platformCapabilities,
   siteSettingsSchema,
   type ConnectionTestDto,
   type SiteDto,
@@ -107,6 +108,8 @@ export function SettingsPage() {
   }, [site, reset]);
 
   if (!site) return <Spinner />;
+  // Web genérica: solo análisis (sin conexión con WordPress, productos ni publicación).
+  const caps = platformCapabilities(site.platform);
 
   const seedsJob = jobs?.items.find((j) => j.type === 'seeds');
   const seedsRunning = seedsJob?.status === 'queued' || seedsJob?.status === 'running';
@@ -184,86 +187,131 @@ export function SettingsPage() {
           </label>
         </Card>
 
-        <Card className="space-y-4">
-          <div className="flex items-start justify-between gap-3">
+        {caps.publishing ? (
+          <>
+            <Card className="space-y-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="font-medium">Conexión con WordPress</h2>
+                  <p className="text-sm text-stone-600 dark:text-stone-400">
+                    {site.hasCredentials
+                      ? 'Hay credenciales guardadas (cifradas). Déjalas en blanco para mantenerlas.'
+                      : 'Aún no hay credenciales guardadas.'}
+                  </p>
+                </div>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Usuario" error={errors.wpUsername?.message}>
+                  <input
+                    className={inputClass}
+                    autoComplete="off"
+                    placeholder={site.hasCredentials ? '•••••• (sin cambios)' : ''}
+                    {...register('wpUsername')}
+                  />
+                </Field>
+                <Field
+                  label="Contraseña de aplicación"
+                  hint="Usuarios → Perfil → Contraseñas de aplicación."
+                  error={errors.wpAppPassword?.message}
+                >
+                  <input
+                    className={inputClass}
+                    autoComplete="off"
+                    placeholder={
+                      site.hasCredentials ? '•••••• (sin cambios)' : 'xxxx xxxx xxxx xxxx'
+                    }
+                    {...register('wpAppPassword')}
+                  />
+                </Field>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  icon={Plug}
+                  loading={test.isPending}
+                  disabled={!site.hasCredentials || isDirty}
+                  onClick={() => void runTest()}
+                >
+                  Probar conexión
+                </Button>
+                {isDirty && (
+                  <span className="text-xs text-stone-500">
+                    Guarda los cambios antes de probar.
+                  </span>
+                )}
+              </div>
+              {result && (
+                <div className="space-y-3">
+                  {result.ok ? (
+                    <Notice
+                      tone="green"
+                      title={`Conexión correcta${result.details?.siteName ? ` con «${result.details.siteName}»` : ''}`}
+                    >
+                      Plugin SEO:{' '}
+                      {result.details?.seoPlugin === 'yoast'
+                        ? 'Yoast SEO'
+                        : result.details?.seoPlugin === 'rankmath'
+                          ? 'Rank Math'
+                          : 'no detectado'}
+                      {' · '}WooCommerce: {result.details?.woocommerce ? 'sí' : 'no'}
+                      {result.details?.yoastMetaExposed === true &&
+                        ' · La meta SEO se guardará en tu plugin.'}
+                    </Notice>
+                  ) : (
+                    <Notice
+                      title={
+                        errorMessages[result.message as keyof typeof errorMessages] ??
+                        result.message
+                      }
+                    />
+                  )}
+                  {result.warnings.map((w) => (
+                    <Notice key={w} title={warningMessages[w]} />
+                  ))}
+                </div>
+              )}
+            </Card>
+            <ConnectorCard settings={site.settings} />
+          </>
+        ) : (
+          <Card className="space-y-4">
             <div>
-              <h2 className="font-medium">Conexión con WordPress</h2>
+              <h2 className="font-medium">Análisis de la web</h2>
               <p className="text-sm text-stone-600 dark:text-stone-400">
-                {site.hasCredentials
-                  ? 'Hay credenciales guardadas (cifradas). Déjalas en blanco para mantenerlas.'
-                  : 'Aún no hay credenciales guardadas.'}
+                Esta web no está conectada: la leemos como Google, por su sitemap y sus páginas
+                públicas (hasta 40, respetando robots.txt). Con eso sacamos la voz de marca, los
+                temas y las keywords. Los artículos se generan para que los copies y los publiques
+                tú. Para ver posiciones y clics reales, conecta Search Console en Rendimiento.
               </p>
             </div>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Usuario" error={errors.wpUsername?.message}>
-              <input
-                className={inputClass}
-                autoComplete="off"
-                placeholder={site.hasCredentials ? '•••••• (sin cambios)' : ''}
-                {...register('wpUsername')}
-              />
-            </Field>
-            <Field
-              label="Contraseña de aplicación"
-              hint="Usuarios → Perfil → Contraseñas de aplicación."
-              error={errors.wpAppPassword?.message}
-            >
-              <input
-                className={inputClass}
-                autoComplete="off"
-                placeholder={site.hasCredentials ? '•••••• (sin cambios)' : 'xxxx xxxx xxxx xxxx'}
-                {...register('wpAppPassword')}
-              />
-            </Field>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <Button
-              type="button"
-              variant="secondary"
-              icon={Plug}
-              loading={test.isPending}
-              disabled={!site.hasCredentials || isDirty}
-              onClick={() => void runTest()}
-            >
-              Probar conexión
-            </Button>
-            {isDirty && (
-              <span className="text-xs text-stone-500">Guarda los cambios antes de probar.</span>
-            )}
-          </div>
-          {result && (
-            <div className="space-y-3">
-              {result.ok ? (
-                <Notice
-                  tone="green"
-                  title={`Conexión correcta${result.details?.siteName ? ` con «${result.details.siteName}»` : ''}`}
-                >
-                  Plugin SEO:{' '}
-                  {result.details?.seoPlugin === 'yoast'
-                    ? 'Yoast SEO'
-                    : result.details?.seoPlugin === 'rankmath'
-                      ? 'Rank Math'
-                      : 'no detectado'}
-                  {' · '}WooCommerce: {result.details?.woocommerce ? 'sí' : 'no'}
-                  {result.details?.yoastMetaExposed === true &&
-                    ' · La meta SEO se guardará en tu plugin.'}
-                </Notice>
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                type="button"
+                variant="secondary"
+                icon={Plug}
+                loading={test.isPending}
+                disabled={isDirty}
+                onClick={() => void runTest()}
+              >
+                Comprobar acceso
+              </Button>
+              {isDirty && (
+                <span className="text-xs text-stone-500">Guarda los cambios antes de probar.</span>
+              )}
+            </div>
+            {result &&
+              (result.ok ? (
+                <Notice tone="green" title="Podemos leer tu web" />
               ) : (
                 <Notice
                   title={
                     errorMessages[result.message as keyof typeof errorMessages] ?? result.message
                   }
                 />
-              )}
-              {result.warnings.map((w) => (
-                <Notice key={w} title={warningMessages[w]} />
               ))}
-            </div>
-          )}
-        </Card>
-
-        <ConnectorCard settings={site.settings} />
+          </Card>
+        )}
 
         <Card className="space-y-4">
           <div>
@@ -285,45 +333,49 @@ export function SettingsPage() {
               {...register('expertise')}
             />
           </Field>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field
-              label="Autor de los artículos"
-              hint={
-                authors.error
-                  ? 'No se pudo leer la lista de usuarios de WordPress.'
-                  : 'Usuario de WordPress que firma los posts.'
-              }
-            >
-              <select className={inputClass} {...register('authorId')}>
-                <option value="">El usuario de la conexión</option>
-                {authors.data?.map((a) => (
-                  <option key={a.id} value={String(a.id)}>
-                    {a.name}
-                  </option>
-                ))}
-                {site.settings.authorId &&
-                  !authors.data?.some((a) => a.id === site.settings.authorId) && (
-                    <option value={String(site.settings.authorId)}>
-                      Usuario #{site.settings.authorId}
+          {caps.publishing && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field
+                label="Autor de los artículos"
+                hint={
+                  authors.error
+                    ? 'No se pudo leer la lista de usuarios de WordPress.'
+                    : 'Usuario de WordPress que firma los posts.'
+                }
+              >
+                <select className={inputClass} {...register('authorId')}>
+                  <option value="">El usuario de la conexión</option>
+                  {authors.data?.map((a) => (
+                    <option key={a.id} value={String(a.id)}>
+                      {a.name}
                     </option>
-                  )}
-              </select>
-            </Field>
-          </div>
-          <label className="flex items-start gap-2 text-sm">
-            <input
-              type="checkbox"
-              className="mt-0.5 rounded border-stone-300 text-teal-700 focus:ring-teal-600"
-              {...register('productCards')}
-            />
-            <span>
-              Recomendar productos de la tienda en los artículos
-              <span className="block text-xs text-stone-500">
-                Con WooCommerce: tarjetas con precio y botón de compra (solo cuando encajan con el
-                tema) y la foto del producto como imagen destacada.
+                  ))}
+                  {site.settings.authorId &&
+                    !authors.data?.some((a) => a.id === site.settings.authorId) && (
+                      <option value={String(site.settings.authorId)}>
+                        Usuario #{site.settings.authorId}
+                      </option>
+                    )}
+                </select>
+              </Field>
+            </div>
+          )}
+          {caps.products && (
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5 rounded border-stone-300 text-teal-700 focus:ring-teal-600"
+                {...register('productCards')}
+              />
+              <span>
+                Recomendar productos de la tienda en los artículos
+                <span className="block text-xs text-stone-500">
+                  Con WooCommerce: tarjetas con precio y botón de compra (solo cuando encajan con el
+                  tema) y la foto del producto como imagen destacada.
+                </span>
               </span>
-            </span>
-          </label>
+            </label>
+          )}
         </Card>
 
         <Card className="space-y-4">
@@ -390,13 +442,15 @@ export function SettingsPage() {
                 ))}
               </select>
             </Field>
-            <Field
-              label="Categoría destino (ID en WordPress)"
-              hint="Opcional. Aparece en la URL al editar la categoría (tag_ID)."
-              error={errors.categoryId?.message}
-            >
-              <input inputMode="numeric" className={inputClass} {...register('categoryId')} />
-            </Field>
+            {caps.publishing && (
+              <Field
+                label="Categoría destino (ID en WordPress)"
+                hint="Opcional. Aparece en la URL al editar la categoría (tag_ID)."
+                error={errors.categoryId?.message}
+              >
+                <input inputMode="numeric" className={inputClass} {...register('categoryId')} />
+              </Field>
+            )}
             <Field label="Modelo de Claude" hint="Vacío = el modelo por defecto del servidor.">
               <input
                 className={inputClass}
@@ -446,36 +500,40 @@ export function SettingsPage() {
               </span>
             </span>
           </label>
-          <label className="flex items-start gap-2 text-sm">
-            <input
-              type="checkbox"
-              className="mt-0.5 rounded border-stone-300 text-teal-700 focus:ring-teal-600"
-              {...register('autoBacklinks')}
-            />
-            <span>
-              Enlazado inverso automático
-              <span className="block text-xs text-stone-500">
-                Cuando un artículo se publica, añadimos un enlace hacia él en hasta 3 artículos
-                antiguos relacionados (un solo párrafo, sin cambiar el resto) y los actualizamos en
-                WordPress.
-              </span>
-            </span>
-          </label>
-          <label className="flex items-start gap-2 text-sm">
-            <input
-              type="checkbox"
-              className="mt-0.5 rounded border-stone-300 text-teal-700 focus:ring-teal-600"
-              {...register('autoPublish')}
-            />
-            <span>
-              Publicar directamente (sin borrador)
-              <span className="block text-xs text-stone-500">
-                Activado: lo que genera la automatización se publica en tu web en cuanto está listo.
-                Desactivado: llega a WordPress como <strong>borrador</strong> para que lo revises.
-                Al enviar a mano desde el editor eliges tú en cada artículo.
-              </span>
-            </span>
-          </label>
+          {caps.publishing && (
+            <>
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 rounded border-stone-300 text-teal-700 focus:ring-teal-600"
+                  {...register('autoBacklinks')}
+                />
+                <span>
+                  Enlazado inverso automático
+                  <span className="block text-xs text-stone-500">
+                    Cuando un artículo se publica, añadimos un enlace hacia él en hasta 3 artículos
+                    antiguos relacionados (un solo párrafo, sin cambiar el resto) y los actualizamos
+                    en WordPress.
+                  </span>
+                </span>
+              </label>
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 rounded border-stone-300 text-teal-700 focus:ring-teal-600"
+                  {...register('autoPublish')}
+                />
+                <span>
+                  Publicar directamente (sin borrador)
+                  <span className="block text-xs text-stone-500">
+                    Activado: lo que genera la automatización se publica en tu web en cuanto está
+                    listo. Desactivado: llega a WordPress como <strong>borrador</strong> para que lo
+                    revises. Al enviar a mano desde el editor eliges tú en cada artículo.
+                  </span>
+                </span>
+              </label>
+            </>
+          )}
         </Card>
 
         <ErrorBanner error={update.error} />

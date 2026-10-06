@@ -17,6 +17,7 @@ import {
   type ProductsOverviewDto,
 } from '@seo/shared';
 import { createAdapter, readCredentials } from '../adapters/factory.js';
+import { assertCapability } from '../platform.js';
 import type { ProductChange } from '../adapters/index.js';
 import { AppError, notFound } from '../errors.js';
 import { productRow, snapshotOf } from '../pipeline/products.js';
@@ -180,7 +181,8 @@ export async function getProduct(
 
 // ---- Acciones ----------------------------------------------------------------
 
-function assertConnected(deps: CoreDeps, site: { credentials: string }) {
+function assertConnected(deps: CoreDeps, site: { credentials: string; platform: string }) {
+  assertCapability(site, 'products');
   if (!readCredentials(site.credentials, deps.encryptionKey)) {
     throw new AppError('NO_CREDENTIALS', 'Site has no credentials', { httpStatus: 400 });
   }

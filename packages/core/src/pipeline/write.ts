@@ -1,4 +1,4 @@
-import { parseSettings } from '@seo/shared';
+import { parseSettings, platformCapabilities } from '@seo/shared';
 import { AppError, errorCode, notFound } from '../errors.js';
 import { applyProductCards, countWords, sanitizeArticleHtml } from '../html.js';
 import type { OutlineResult } from '../ai/prompts/outline.js';
@@ -13,7 +13,7 @@ import {
 } from '../ai/prompts/write.js';
 import type { StoreProduct } from '../adapters/index.js';
 import { siteScope } from '../tenant.js';
-import { adapterFor, loadSite, modelFor, siteContext } from './common.js';
+import { adapterFor, loadSite, modelFor, readerFor, siteContext } from './common.js';
 import type { PipelineContext, RunInfo } from './context.js';
 import { runTracked } from './run-tracked.js';
 import { recordUsage } from './usage.js';
@@ -86,7 +86,7 @@ export function runWrite(ctx: PipelineContext, info: RunInfo): Promise<void> {
         if (pillar) links.unshift(pillar);
       }
       try {
-        const content = await adapterFor(ctx, site).listContent(MAX_LINKS);
+        const content = await readerFor(ctx, site).listContent(MAX_LINKS);
         const seen = new Set(links.map((l) => l.url));
         links.push(
           ...content.filter((c) => !seen.has(c.url)).map((c) => ({ title: c.title, url: c.url })),
@@ -98,7 +98,11 @@ export function runWrite(ctx: PipelineContext, info: RunInfo): Promise<void> {
 
       // Productos de la tienda que el artículo puede recomendar (tarjeta con precio y compra).
       let products: StoreProduct[] = [];
-      if (settings.productCards && settings.woocommerce !== false) {
+      if (
+        settings.productCards &&
+        settings.woocommerce !== false &&
+        platformCapabilities(site.platform).products
+      ) {
         try {
           products = await adapterFor(ctx, site).searchProducts(keyword?.term ?? article.title, 8);
         } catch (err) {
@@ -151,7 +155,11 @@ export function runWrite(ctx: PipelineContext, info: RunInfo): Promise<void> {
       if (article.keywordId) await scope.keywords.updateById(article.keywordId, { status: 'done' });
       await recordUsage(ctx.prisma, site.id, { articles: 1 });
 
-      if (info.chain === 'publish' && !settings.requireApproval) {
+      if (
+        info.chain === 'publish' &&
+        !settings.requireApproval &&
+        platformCapabilities(site.platform).publishing
+      ) {
         await ctx.dispatcher.enqueue('publish', { siteId: site.id, refId: article.id });
       }
       return {

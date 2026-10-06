@@ -99,3 +99,42 @@ export async function assertPublicDestination(rawUrl: string): Promise<void> {
     });
   }
 }
+
+export interface SafeFetchOptions {
+  allowPrivate: boolean;
+  fetchFn?: typeof fetch | undefined;
+  timeoutMs?: number;
+  maxRedirects?: number;
+}
+
+export const CRAWLER_USER_AGENT = 'Mozilla/5.0 (compatible; SEOAutopilot/1.0)';
+
+/**
+ * GET a una URL de terceros: comprueba el destino (SSRF) en cada salto de redirección, que se
+ * siguen a mano. Devuelve la respuesta final (sea cual sea su estado) o null si no se pudo llegar.
+ */
+export async function safeFetch(
+  rawUrl: string,
+  { allowPrivate, fetchFn = fetch, timeoutMs = 8_000, maxRedirects = 5 }: SafeFetchOptions,
+): Promise<{ res: Response; url: string } | null> {
+  let url = rawUrl;
+  for (let hop = 0; hop <= maxRedirects; hop++) {
+    try {
+      if (!allowPrivate) await assertPublicDestination(url);
+      const res = await fetchFn(url, {
+        headers: { 'User-Agent': CRAWLER_USER_AGENT },
+        redirect: 'manual',
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      const location = res.status >= 300 && res.status < 400 ? res.headers.get('location') : null;
+      if (!location) return { res, url };
+      await res.body?.cancel().catch(() => undefined);
+      const next = new URL(location, url);
+      if (next.protocol !== 'http:' && next.protocol !== 'https:') return null;
+      url = next.toString();
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}

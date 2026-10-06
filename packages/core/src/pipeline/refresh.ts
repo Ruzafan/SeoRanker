@@ -14,7 +14,7 @@ import { countWords, extractLinks, sanitizeArticleHtml } from '../html.js';
 import { GoogleClient } from '../integrations/google.js';
 import { fetchSerp, medianWordCount, type SerpSnapshot } from '../keywords/serp.js';
 import { siteScope } from '../tenant.js';
-import { adapterFor, loadSite, modelFor, siteContext } from './common.js';
+import { loadSite, modelFor, readerFor, siteContext } from './common.js';
 import type { PipelineContext, RunInfo } from './context.js';
 import { assertQuota } from './quota.js';
 import { runTracked } from './run-tracked.js';
@@ -132,7 +132,7 @@ export function runRefresh(ctx: PipelineContext, info: RunInfo): Promise<void> {
     // Enlaces permitidos: los que ya tenía y las páginas reales del sitio.
     const allowed = new Set(extractLinks(article.contentHtml));
     try {
-      (await adapterFor(ctx, site).listContent(25)).forEach((c) => allowed.add(c.url));
+      (await readerFor(ctx, site).listContent(25)).forEach((c) => allowed.add(c.url));
     } catch {
       // Sin la lista del sitio se conservan al menos los enlaces que ya tenía.
     }

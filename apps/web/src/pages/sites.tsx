@@ -20,6 +20,7 @@ import {
   EmptyState,
   ErrorBanner,
   Field,
+  Notice,
   PageHeader,
   Spinner,
   cx,
@@ -207,7 +208,7 @@ const jobTypeName = (t: string): string => (t in jobTypeLabel ? jobTypeLabel[t a
 export function NewSitePage() {
   const create = useCreateSite();
   const navigate = useNavigate();
-  const { register, handleSubmit, formState } = useForm<
+  const { register, handleSubmit, formState, watch } = useForm<
     z.input<typeof createSiteSchema>,
     unknown,
     CreateSiteInput
@@ -216,12 +217,13 @@ export function NewSitePage() {
     defaultValues: { language: 'es', country: 'ES', platform: 'wordpress' },
   });
   const { errors } = formState;
+  const platform = PLATFORMS[watch('platform') ?? 'wordpress'];
 
   return (
     <div className="mx-auto max-w-xl">
       <PageHeader
-        title="Añadir tienda"
-        description="Elige la plataforma de tu tienda. Con WordPress conectamos mediante una contraseña de aplicación."
+        title="Añadir sitio"
+        description="Con WordPress conectamos mediante una contraseña de aplicación y publicamos por ti. Cualquier otra web la analizamos sin conectarla: posiciones, keywords, canibalización y visibilidad en IA."
       />
       <Card>
         <form
@@ -229,8 +231,15 @@ export function NewSitePage() {
           onSubmit={handleSubmit((v) =>
             create.mutate(v, {
               onSuccess: (site) => {
-                toast.success('Sitio creado. Prueba la conexión para comprobar las credenciales.');
-                navigate(`/sites/${site.id}/settings`);
+                if (PLATFORMS[v.platform].needsCredentials) {
+                  toast.success(
+                    'Sitio creado. Prueba la conexión para comprobar las credenciales.',
+                  );
+                  navigate(`/sites/${site.id}/settings`);
+                } else {
+                  toast.success('Sitio creado. Estamos leyendo la web y buscando keywords.');
+                  navigate(`/sites/${site.id}`);
+                }
               },
             }),
           )}
@@ -268,7 +277,11 @@ export function NewSitePage() {
           </Field>
           <Field
             label="URL del sitio"
-            hint="Con https://. Es donde está instalado WordPress."
+            hint={
+              platform.needsCredentials
+                ? 'Con https://. Es donde está instalado WordPress.'
+                : 'Con https://. La portada de la web que quieres analizar.'
+            }
             error={errors.url?.message}
           >
             <input
@@ -286,21 +299,32 @@ export function NewSitePage() {
               <input className={inputClass} maxLength={2} {...register('country')} />
             </Field>
           </div>
-          <Field label="Usuario de WordPress" error={errors.wpUsername?.message}>
-            <input className={inputClass} autoComplete="off" {...register('wpUsername')} />
-          </Field>
-          <Field
-            label="Contraseña de aplicación"
-            hint="Se guarda cifrada (AES-256-GCM) y nunca se vuelve a mostrar."
-            error={errors.wpAppPassword?.message}
-          >
-            <input
-              className={inputClass}
-              autoComplete="off"
-              placeholder="xxxx xxxx xxxx xxxx xxxx xxxx"
-              {...register('wpAppPassword')}
-            />
-          </Field>
+          {platform.needsCredentials && (
+            <>
+              <Field label="Usuario de WordPress" error={errors.wpUsername?.message}>
+                <input className={inputClass} autoComplete="off" {...register('wpUsername')} />
+              </Field>
+              <Field
+                label="Contraseña de aplicación"
+                hint="Se guarda cifrada (AES-256-GCM) y nunca se vuelve a mostrar."
+                error={errors.wpAppPassword?.message}
+              >
+                <input
+                  className={inputClass}
+                  autoComplete="off"
+                  placeholder="xxxx xxxx xxxx xxxx xxxx xxxx"
+                  {...register('wpAppPassword')}
+                />
+              </Field>
+            </>
+          )}
+          {!platform.needsCredentials && (
+            <Notice title="Solo análisis">
+              No hace falta acceso a la web: la leemos por su sitemap y sus páginas públicas. Los
+              artículos que generes los copias y publicas tú. Conecta Search Console después para
+              ver posiciones y clics reales.
+            </Notice>
+          )}
           <ErrorBanner error={create.error} />
           <div className="flex justify-end gap-2">
             <Link to="/sites">
@@ -309,7 +333,7 @@ export function NewSitePage() {
               </Button>
             </Link>
             <Button type="submit" loading={create.isPending}>
-              Crear tienda
+              Crear sitio
             </Button>
           </div>
         </form>

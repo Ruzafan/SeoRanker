@@ -12,7 +12,7 @@ import { fetchSerp, medianWordCount, type SerpSnapshot } from '../keywords/serp.
 import { findCannibal, type Target } from '../keywords/similarity.js';
 import { errorCode } from '../errors.js';
 import { siteScope } from '../tenant.js';
-import { adapterFor, loadSite, modelFor, siteContext } from './common.js';
+import { loadSite, modelFor, readerFor, siteContext } from './common.js';
 import type { PipelineContext, RunInfo } from './context.js';
 import { runTracked } from './run-tracked.js';
 
@@ -60,7 +60,7 @@ export function runOutline(ctx: PipelineContext, info: RunInfo): Promise<void> {
           texts: [a.title, ...(a.keyword ? [a.keyword.term] : [])],
         }));
         try {
-          const blog = await adapterFor(ctx, site).listContent(60);
+          const blog = await readerFor(ctx, site).listContent(60);
           blog
             .filter((c) => c.type === 'post')
             .forEach((c) => targets.push({ id: `wp:${c.url}`, texts: [c.title] }));

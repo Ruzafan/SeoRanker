@@ -38,7 +38,16 @@ const toLocalInput = (iso: string | null) => {
 };
 
 /** Programación, revisión del cliente, comentarios y refresco de un artículo. */
-export function WorkflowPanel({ siteId, article }: { siteId: string; article: ArticleDto }) {
+export function WorkflowPanel({
+  siteId,
+  article,
+  canSchedule = true,
+}: {
+  siteId: string;
+  article: ArticleDto;
+  /** Sin publicación automática (web genérica) no hay nada que programar. */
+  canSchedule?: boolean;
+}) {
   const { data: me } = useMe();
   const viewer = me?.role === 'viewer';
   const plan = me && isPlanId(me.plan) ? PLANS[me.plan] : PLANS.free;
@@ -64,7 +73,7 @@ export function WorkflowPanel({ siteId, article }: { siteId: string; article: Ar
         {article.decayDetectedAt && <Badge tone="red">Pierde tráfico</Badge>}
       </div>
 
-      {!viewer && (
+      {!viewer && canSchedule && (
         <div className="flex flex-wrap items-end gap-2">
           <label className="text-sm">
             <span className="mb-1 flex items-center gap-1.5 font-medium">

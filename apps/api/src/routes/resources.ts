@@ -50,6 +50,7 @@ import {
   patchArticle,
   patchKeyword,
   publishArticle,
+  markArticlePublished,
   regenerateArticle,
   requireSite,
   testSiteConnection,
@@ -77,6 +78,7 @@ import {
   patchArticleSchema,
   patchKeywordSchema,
   publishArticleSchema,
+  markPublishedSchema,
   selectPropertySchema,
   updateSiteSchema,
 } from '@seo/shared';
@@ -224,6 +226,13 @@ export function resourceRoutes(deps: CoreDeps, auth: AuthHelpers) {
       const { id } = idParam.parse(req.params);
       const body = publishArticleSchema.parse(req.body ?? {});
       return reply.status(202).send(await publishArticle(deps, org(req), id, body));
+    });
+
+    app.post('/articles/:id/mark-published', async (req) => {
+      const { id } = idParam.parse(req.params);
+      const body = markPublishedSchema.parse(req.body);
+      await markArticlePublished(deps, org(req), id, body);
+      return getArticleDto(deps, org(req), id);
     });
 
     app.post('/articles/:id/regenerate', async (req, reply) => {
