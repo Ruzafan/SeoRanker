@@ -21,6 +21,13 @@ export type LoginInput = z.infer<typeof loginSchema>;
 const langSchema = z.string().trim().toLowerCase().length(2);
 const countrySchema = z.string().trim().toUpperCase().length(2);
 
+/** Campo opcional de formulario: vacío (o solo espacios) cuenta como no enviado. */
+const optionalText = (min: number, max: number) =>
+  z
+    .union([z.string().trim().length(0), z.string().trim().min(min).max(max)])
+    .optional()
+    .transform((v) => v || undefined);
+
 export const createSiteSchema = z
   .object({
     name: z.string().trim().min(1).max(100),
@@ -29,8 +36,8 @@ export const createSiteSchema = z
     country: countrySchema,
     /** Las no disponibles se rechazan en el servicio con PLATFORM_NOT_SUPPORTED. */
     platform: z.enum(PLATFORM_IDS).default('wordpress'),
-    wpUsername: z.string().trim().min(1).max(100).optional(),
-    wpAppPassword: z.string().trim().min(8).max(200).optional(),
+    wpUsername: optionalText(1, 100),
+    wpAppPassword: optionalText(8, 200),
   })
   .superRefine((v, ctx) => {
     // Solo las plataformas con conector piden credenciales (una web genérica solo se analiza).

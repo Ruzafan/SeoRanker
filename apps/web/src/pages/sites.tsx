@@ -215,6 +215,8 @@ export function NewSitePage() {
   >({
     resolver: zodResolver(createSiteSchema),
     defaultValues: { language: 'es', country: 'ES', platform: 'wordpress' },
+    // Las credenciales se ocultan al elegir una web genérica: que no viajen ni se validen.
+    shouldUnregister: true,
   });
   const { errors } = formState;
   const platform = PLATFORMS[watch('platform') ?? 'wordpress'];
